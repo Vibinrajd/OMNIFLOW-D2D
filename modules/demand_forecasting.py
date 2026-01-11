@@ -1,2 +1,2 @@
-def demand_forecating():
+def demand_forecasting():
     print("Demand module loaded successfully!")
