@@ -73,6 +73,8 @@ def genai_response(user_query, context):
     except Exception as e:
         return f"⚠️ Gemini error: {str(e)}"
 
+    for m in genai.list_models():
+        print(m.name, m.supported_generation_methods)
 
 # ======================================================================================
 # DATA DICTIONARY
