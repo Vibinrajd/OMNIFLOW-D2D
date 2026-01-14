@@ -1,3 +1,5 @@
+gemini-1.5-flash
+pip install google-generativeai
 openai>=1.0.0
 streamlit
 pandas
