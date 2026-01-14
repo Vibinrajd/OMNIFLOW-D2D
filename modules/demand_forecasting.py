@@ -1,46 +1,35 @@
 # ======================================================================================
 # OmniFlow-D2D : Demand Forecasting Module (STREAMLIT PAGE MODULE)
 # ======================================================================================
-# Project Type : MAJOR MSc Data Science Project
-# Module Type  : Streamlit Page Module (Imported into app.py)
-#
-# IMPORTANT:
-# - This file DOES NOT run standalone
-# - It exposes ONE function: demand_forecasting_page()
-# - app.py controls routing and layout
-#
+# MSc Data Science – MAJOR PROJECT
 # ======================================================================================
 
-# ----------------------------------
-# STANDARD LIBRARIES
-# ----------------------------------
+# ------------------------------
+# LIBRARIES
+# ------------------------------
 import os
-import json
 import warnings
 from datetime import timedelta
 
-# ----------------------------------
-# THIRD PARTY LIBRARIES
-# ----------------------------------
 import numpy as np
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 import plotly.graph_objects as go
 
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 
 warnings.filterwarnings("ignore")
 
-# ======================================================================================
+# ------------------------------
 # CONFIG
-# ======================================================================================
-
+# ------------------------------
 DATA_PATH = "data/sales.csv"
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -48,40 +37,53 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # ======================================================================================
 # DATA DICTIONARY
 # ======================================================================================
-
 DATA_DICTIONARY = pd.DataFrame({
     "Column": [
         "date", "product_id", "daily_sales", "price", "promotion",
         "lag_sales_1", "lag_sales_7", "rolling_mean_7",
-        "forecast_demand", "lower_bound", "upper_bound", "model_used"
+        "forecast_demand", "lower_bound", "upper_bound"
     ],
     "Description": [
         "Transaction date",
         "Unique product identifier",
         "Units sold per day",
         "Unit selling price",
-        "Promotion flag (0/1)",
-        "Previous day sales",
-        "Previous week sales",
+        "Promotion indicator (0/1)",
+        "Previous day demand",
+        "Demand one week ago",
         "7-day rolling average demand",
-        "Predicted demand",
-        "Lower confidence interval",
-        "Upper confidence interval",
-        "Best ML model selected"
+        "Predicted future demand",
+        "Lower confidence bound",
+        "Upper confidence bound"
     ]
 })
 
 # ======================================================================================
-# HELPER FUNCTIONS
+# DATA LOADING
 # ======================================================================================
-
 @st.cache_data
-def load_sales_data():
+def load_data():
     df = pd.read_csv(DATA_PATH)
     df["date"] = pd.to_datetime(df["date"])
     return df
 
+# ======================================================================================
+# DATA PROFILING
+# ======================================================================================
+def data_profiling(df):
+    profile = {
+        "Total Records": len(df),
+        "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
+        "Missing Values (%)": round(df.isnull().mean().mean() * 100, 2),
+        "Zero Sales Ratio (%)": round((df["daily_sales"] == 0).mean() * 100, 2),
+        "Avg Daily Sales": round(df["daily_sales"].mean(), 2),
+        "Sales Std Dev": round(df["daily_sales"].std(), 2)
+    }
+    return profile
 
+# ======================================================================================
+# FEATURE ENGINEERING
+# ======================================================================================
 def feature_engineering(df):
     df = df.sort_values(["product_id", "date"])
 
@@ -98,7 +100,9 @@ def feature_engineering(df):
     df.reset_index(drop=True, inplace=True)
     return df
 
-
+# ======================================================================================
+# MODEL TRAINING
+# ======================================================================================
 def train_models(X_train, y_train, X_test, y_test):
     models = {
         "Linear Regression": LinearRegression(),
@@ -131,179 +135,159 @@ def train_models(X_train, y_train, X_test, y_test):
 
     return results_df, best_model, predictions[best_model]
 
-
-def generate_pdf_report(metrics, insights):
-    file_path = f"{OUTPUT_DIR}/demand_forecast_report.pdf"
-    doc = SimpleDocTemplate(file_path, pagesize=A4)
+# ======================================================================================
+# PDF REPORT
+# ======================================================================================
+def generate_pdf(metrics, insights):
+    path = f"{OUTPUT_DIR}/Demand_Forecast_Report.pdf"
+    doc = SimpleDocTemplate(path, pagesize=A4)
     styles = getSampleStyleSheet()
     story = []
 
     story.append(Paragraph("<b>OmniFlow-D2D Demand Forecast Report</b>", styles["Title"]))
-    story.append(Paragraph("<br/>", styles["Normal"]))
+    story.append(Spacer(1, 12))
 
+    story.append(Paragraph("<b>Executive Summary</b>", styles["Heading2"]))
     for k, v in metrics.items():
         story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
 
-    story.append(Paragraph("<br/><b>AI Insights</b>", styles["Heading2"]))
-    for i in insights:
-        story.append(Paragraph(f"- {i}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("<b>AI-Generated Insights</b>", styles["Heading2"]))
+    for ins in insights:
+        story.append(Paragraph(ins, styles["Normal"]))
 
     doc.build(story)
-    return file_path
-
+    return path
 
 # ======================================================================================
-# MAIN STREAMLIT PAGE FUNCTION
+# MAIN STREAMLIT PAGE
 # ======================================================================================
-
 def demand_forecasting_page():
-    """
-    Streamlit Demand Forecasting Page
-    Called from app.py
-    """
 
-    st.header("📈 Demand Forecasting Intelligence")
+    st.header("📈 Demand Forecasting – Intelligence Module")
 
-    # --------------------------------------------------
-    # LOAD DATA
-    # --------------------------------------------------
-    if not os.path.exists(DATA_PATH):
-        st.error("❌ sales.csv not found in data/ folder")
-        return
+    # ------------------------------
+    # LOAD & PROFILE DATA
+    # ------------------------------
+    df_raw = load_data()
+    profile = data_profiling(df_raw)
 
-    raw_df = load_sales_data()
-
-    # --------------------------------------------------
-    # DATA DICTIONARY
-    # --------------------------------------------------
     with st.expander("📘 Data Dictionary"):
         st.dataframe(DATA_DICTIONARY, use_container_width=True)
 
-    # --------------------------------------------------
+    with st.expander("🔍 Data Profiling & Quality Checks"):
+        for k, v in profile.items():
+            st.write(f"**{k}:** {v}")
+
+    # ------------------------------
     # FEATURE ENGINEERING
-    # --------------------------------------------------
-    df = feature_engineering(raw_df)
+    # ------------------------------
+    df = feature_engineering(df_raw)
 
-    FEATURES = [
-        "price",
-        "promotion",
-        "lag_sales_1",
-        "lag_sales_7",
-        "rolling_mean_7"
-    ]
-
+    FEATURES = ["price", "promotion", "lag_sales_1", "lag_sales_7", "rolling_mean_7"]
     X = df[FEATURES]
     y = df["daily_sales"]
 
-    split_idx = int(len(df) * 0.8)
-    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-    y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+    split = int(len(df) * 0.8)
+    X_train, X_test = X.iloc[:split], X.iloc[split:]
+    y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    # --------------------------------------------------
+    # ------------------------------
     # TRAIN MODELS
-    # --------------------------------------------------
-    results_df, best_model, best_preds = train_models(
-        X_train, y_train, X_test, y_test
-    )
+    # ------------------------------
+    results_df, best_model, preds = train_models(X_train, y_train, X_test, y_test)
 
     forecast_df = df.iloc[X_test.index].copy()
-    forecast_df["forecast_demand"] = best_preds
+    forecast_df["forecast_demand"] = preds
+    std = preds.std()
+    forecast_df["lower_bound"] = preds - 1.96 * std
+    forecast_df["upper_bound"] = preds + 1.96 * std
 
-    std = np.std(best_preds)
-    forecast_df["lower_bound"] = best_preds - 1.96 * std
-    forecast_df["upper_bound"] = best_preds + 1.96 * std
-    forecast_df["model_used"] = best_model
-
-    # --------------------------------------------------
+    # ------------------------------
     # KPIs
-    # --------------------------------------------------
-    st.subheader("📊 Executive KPIs")
-
+    # ------------------------------
+    st.subheader("📊 Executive KPI Dashboard")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Avg Forecast", f"{forecast_df['forecast_demand'].mean():.0f}")
-    c2.metric("Best Model", best_model)
-    c3.metric("RMSE", f"{results_df.iloc[0]['RMSE']:.2f}")
-    c4.metric("Volatility", f"{forecast_df['forecast_demand'].std():.2f}")
+    c1.metric("Best Model", best_model)
+    c2.metric("Avg Forecast", int(forecast_df["forecast_demand"].mean()))
+    c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
+    c4.metric("Demand Volatility", round(forecast_df["forecast_demand"].std(), 2))
 
-    # --------------------------------------------------
+    # ------------------------------
     # MODEL COMPARISON
-    # --------------------------------------------------
+    # ------------------------------
     st.subheader("🤖 Model Comparison")
     st.dataframe(results_df, use_container_width=True)
 
-    # --------------------------------------------------
-    # FILTERS
-    # --------------------------------------------------
-    product = st.selectbox(
-        "Select Product",
-        sorted(forecast_df["product_id"].unique())
+    fig_rmse = px.bar(
+        results_df,
+        x="Model",
+        y="RMSE",
+        title="Model RMSE Comparison",
+        text="RMSE"
     )
+    st.plotly_chart(fig_rmse, use_container_width=True)
 
-    filtered_df = forecast_df[forecast_df["product_id"] == product]
+    # ------------------------------
+    # FILTERS
+    # ------------------------------
+    product = st.selectbox("Select Product", forecast_df["product_id"].unique())
+    fdf = forecast_df[forecast_df["product_id"] == product]
 
-    # --------------------------------------------------
-    # FORECAST CHART
-    # --------------------------------------------------
-    st.subheader("📈 Forecast with Confidence Interval")
+    # ------------------------------
+    # ADVANCED CHARTS (5+)
+    # ------------------------------
+    st.subheader("📈 Forecast Analysis")
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=filtered_df["date"],
-        y=filtered_df["forecast_demand"],
-        mode="lines+markers",
-        name="Forecast"
-    ))
-    fig.add_trace(go.Scatter(
-        x=filtered_df["date"],
-        y=filtered_df["upper_bound"],
-        line=dict(dash="dot"),
-        name="Upper Bound"
-    ))
-    fig.add_trace(go.Scatter(
-        x=filtered_df["date"],
-        y=filtered_df["lower_bound"],
-        fill="tonexty",
-        line=dict(dash="dot"),
-        name="Lower Bound"
-    ))
+    fig1 = px.line(fdf, x="date", y="forecast_demand", title="Forecast Trend")
+    fig2 = px.line(fdf, x="date", y="rolling_mean_7", title="Rolling Demand")
+    fig3 = px.histogram(fdf, x="forecast_demand", title="Forecast Distribution")
 
-    st.plotly_chart(fig, use_container_width=True)
+    fig4 = go.Figure()
+    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast_demand"], name="Forecast"))
+    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"], name="Upper CI", line=dict(dash="dot")))
+    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"], name="Lower CI", fill="tonexty"))
 
-    # --------------------------------------------------
+    fig5 = px.box(fdf, y="forecast_demand", title="Demand Volatility")
+
+    for fig in [fig1, fig2, fig3, fig4, fig5]:
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ------------------------------
     # AI INSIGHTS
-    # --------------------------------------------------
-    st.subheader("🤖 AI Insights")
+    # ------------------------------
+    st.subheader("🤖 AI-Driven Insights")
 
     insights = []
-    if filtered_df["forecast_demand"].std() > 0.25 * filtered_df["forecast_demand"].mean():
-        insights.append("⚠ High demand volatility detected")
-    if filtered_df["forecast_demand"].mean() > filtered_df["upper_bound"].mean() * 0.9:
-        insights.append("📦 Risk of stock-out")
+    cv = fdf["forecast_demand"].std() / fdf["forecast_demand"].mean()
 
-    for i in insights:
-        st.write(i)
+    insights.append(
+        f"Demand coefficient of variation is {cv:.2f}, indicating "
+        f"{'high' if cv > 0.3 else 'moderate'} demand volatility."
+    )
 
-    # --------------------------------------------------
-    # PDF EXPORT
-    # --------------------------------------------------
-    if st.button("📥 Download Demand Forecast Report (PDF)"):
-        pdf_path = generate_pdf_report(
+    if fdf["forecast_demand"].mean() > fdf["upper_bound"].mean() * 0.9:
+        insights.append(
+            "Forecast demand is approaching the upper confidence bound, "
+            "indicating potential stock-out risk."
+        )
+
+    for ins in insights:
+        st.write("•", ins)
+
+    # ------------------------------
+    # PDF DOWNLOAD
+    # ------------------------------
+    if st.button("📥 Download Detailed Demand Forecast Report (PDF)"):
+        pdf = generate_pdf(
             {
                 "Best Model": best_model,
-                "Avg Forecast": f"{forecast_df['forecast_demand'].mean():.2f}"
+                "Average Forecast": round(forecast_df["forecast_demand"].mean(), 2),
+                "RMSE": round(results_df.iloc[0]["RMSE"], 2)
             },
             insights
         )
-        with open(pdf_path, "rb") as f:
-            st.download_button(
-                "Download PDF",
-                f,
-                file_name="demand_forecast_report.pdf"
-            )
+        with open(pdf, "rb") as f:
+            st.download_button("Download PDF", f, file_name="Demand_Forecast_Report.pdf")
 
-    # --------------------------------------------------
-    # SAVE OUTPUT
-    # --------------------------------------------------
-    forecast_df.to_csv(f"{OUTPUT_DIR}/forecast_demand.csv", index=False)
-
-    st.success("✅ Demand Forecasting Completed")
+    st.success("✅ Demand Forecasting Analysis Completed")
