@@ -1,5 +1,5 @@
 # application.py
-# OmniFlow-D2D : Streamlit Application (FINAL & CORRECT)
+# OmniFlow-D2D : Streamlit Application (MODULE-BASED)
 
 import os
 import sys
@@ -13,9 +13,9 @@ if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
 # --------------------------------------------------
-# CORRECT MODULE IMPORTS (IMPORTANT)
+# CORRECT MODULE IMPORTS
 # --------------------------------------------------
-streamlit run demand_forecasting_app.py
+from modules.demand_forecasting import run_demand_forecasting
 from modules.inventory_optimization import inventory_analysis
 from modules.logistics_prediction import logistics_dashboard
 from modules.ai_decision_engine import ai_insights
