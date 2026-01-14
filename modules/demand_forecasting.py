@@ -155,6 +155,42 @@ def generate_pdf(metrics, insights):
     doc.build(story)
     return path
 
+
+    from openai import OpenAI
+    
+    client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", None))
+    
+    def genai_response(user_query, context):
+        """
+        Context-aware GenAI response
+        """
+    
+        if client.api_key is None:
+            return "⚠️ GenAI API key not configured."
+    
+        system_prompt = f"""
+        You are an AI supply-chain analyst.
+    
+        Context:
+        {context}
+    
+        Rules:
+        - Answer using the provided data
+        - Be concise, analytical, and business-focused
+        - Do not hallucinate numbers
+        """
+    
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_query}
+            ],
+            temperature=0.2
+        )
+    
+        return response.choices[0].message.content
+
 # ======================================================================================
 # MAIN STREAMLIT PAGE
 # ======================================================================================
@@ -200,6 +236,8 @@ def demand_forecasting_page():
     forecast_df["lower_bound"] = preds - 1.96 * std
     forecast_df["upper_bound"] = preds + 1.96 * std
 
+
+    
     # ------------------------------
     # KPI CARDS
     # ------------------------------
@@ -352,6 +390,18 @@ def demand_forecasting_page():
     for ins in insights:
         st.write("•", ins)
 
+
+    genai_context = f"""
+    Best Model: {best_model}
+    Average Forecast: {avg_demand:.2f}
+    Peak Demand: {peak_demand:.2f}
+    Volatility (%): {volatility_pct:.2f}
+    RMSE: {best_rmse:.2f}
+    
+    Key Risks:
+    {"; ".join(insights)}
+    """
+
     # ------------------------------
     # PDF DOWNLOAD
     # ------------------------------
@@ -373,3 +423,26 @@ def demand_forecasting_page():
             )
 
     st.success("✅ Demand Forecasting Analysis Completed Successfully")
+
+
+    st.divider()
+    st.subheader("🤖 GenAI Demand Assistant")
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    
+    user_input = st.chat_input("Ask about demand, risk, models, or insights...")
+    
+    if user_input:
+        with st.spinner("Thinking..."):
+            reply = genai_response(user_input, genai_context)
+    
+        st.session_state.chat_history.append(
+            {"user": user_input, "assistant": reply}
+        )
+    
+    for chat in st.session_state.chat_history:
+        with st.chat_message("user"):
+            st.write(chat["user"])
+        with st.chat_message("assistant"):
+            st.write(chat["assistant"])
