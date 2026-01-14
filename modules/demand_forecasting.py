@@ -332,7 +332,7 @@ def demand_forecasting_page():
         reply = genai_response(user_input, genai_context)
 
         # Limit chat history to last 10 messages
-        st.session_state.chat_history = st.session_state.chat_history[-10:]
+    st.session_state.chat_history = st.session_state.chat_history[-10:]
 
 
     for chat in st.session_state.chat_history:
