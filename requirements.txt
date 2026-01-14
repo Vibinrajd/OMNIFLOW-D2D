@@ -1,5 +1,4 @@
 huggingface_hub
-openai>=1.0.0
 streamlit
 pandas
 numpy
@@ -9,4 +8,4 @@ scikit-learn
 statsmodels
 prophet
 reportlab
-google-generativeai
+
