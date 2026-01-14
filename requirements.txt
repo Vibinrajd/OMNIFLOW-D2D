@@ -1,3 +1,4 @@
+gemini-1.5-flash
 openai>=1.0.0
 streamlit
 pandas
