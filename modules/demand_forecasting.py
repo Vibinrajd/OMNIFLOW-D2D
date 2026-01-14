@@ -37,47 +37,53 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # ======================================================================================
 # GEN-AI HELPER FUNCTION (GLOBAL)
 # ======================================================================================
+# ======================================================================================
+# GEN-AI HELPER FUNCTION (GPT-3.5-TURBO)
+# ======================================================================================
 def genai_response(user_query, context):
 
     api_key = st.secrets.get("OPENAI_API_KEY", None)
 
     if api_key is None:
-        return "⚠️ GenAI API key not configured."
+        return "⚠️ OpenAI API key not configured."
 
     try:
         client = OpenAI(api_key=api_key)
 
         system_prompt = f"""
-        You are an AI supply-chain analyst.
+        You are a senior supply-chain analytics expert.
 
         Context (STRICT – do not hallucinate):
         {context}
 
         Rules:
-        - Use only the given context
+        - Answer only from the context
         - Explain ML results clearly
-        - Provide business recommendations
+        - Give business-oriented recommendations
+        - Be concise and professional
         """
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-3.5-turbo",   # ✅ TURBO MODEL
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_query}
             ],
-            temperature=0.2
+            temperature=0.2,
+            max_tokens=250
         )
 
         return response.choices[0].message.content
 
     except RateLimitError:
         return (
-            "⚠️ GenAI rate limit reached.\n\n"
+            "⚠️ OpenAI rate limit reached.\n\n"
             "Please retry later. Analytical insights are already shown above."
         )
 
     except Exception as e:
-        return f"⚠️ GenAI unavailable: {str(e)}"
+        return f"⚠️ OpenAI error: {str(e)}"
+
 
 # ======================================================================================
 # DATA DICTIONARY
@@ -339,7 +345,7 @@ def demand_forecasting_page():
         )
         with open(pdf, "rb") as f:
             st.download_button("Download PDF", f)
-
+    
     # ------------------------------
     # GENAI CHATBOT
     # ------------------------------
@@ -354,6 +360,12 @@ def demand_forecasting_page():
 
     st.divider()
     st.subheader("🤖 GenAI Demand Assistant")
+    st.caption(
+    "Try asking: Why was Random Forest selected? | "
+    "Is there stock-out risk? | "
+    "Explain confidence interval | "
+    "How volatile is demand?"
+     )
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
