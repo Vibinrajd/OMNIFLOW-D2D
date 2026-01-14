@@ -8,14 +8,11 @@
 # ------------------------------
 import os
 import warnings
-
 import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-
-from openai import OpenAI, RateLimitError
 
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
@@ -35,54 +32,6 @@ OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ======================================================================================
-# GEN-AI HELPER FUNCTION (OPENAI GPT-3.5-TURBO)
-# ======================================================================================
-def genai_response(user_query: str, context: str) -> str:
-    """
-    Context-aware GenAI assistant using OpenAI GPT-3.5-turbo
-    """
-
-    api_key = st.secrets.get("OPENAI_API_KEY", None)
-    if not api_key:
-        return "⚠️ OpenAI API key not configured in Streamlit secrets."
-
-    try:
-        client = OpenAI(api_key=api_key)
-
-        system_prompt = f"""
-        You are a senior supply chain analytics expert.
-
-        Use ONLY the context below.
-        Do NOT hallucinate.
-        Explain ML results and business risks clearly.
-        Keep answers concise and professional.
-
-        CONTEXT:
-        {context}
-        """
-
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_query}
-            ],
-            temperature=0.2,
-            max_tokens=250
-        )
-
-        return response.choices[0].message.content
-
-    except RateLimitError:
-        return (
-            "⚠️ OpenAI rate limit reached.\n\n"
-            "Please retry later. Analytical insights are already shown above."
-        )
-
-    except Exception as e:
-        return f"⚠️ OpenAI error: {str(e)}"
-
-# ======================================================================================
 # DATA DICTIONARY
 # ======================================================================================
 DATA_DICTIONARY = pd.DataFrame({
@@ -97,9 +46,9 @@ DATA_DICTIONARY = pd.DataFrame({
         "Units sold per day",
         "Unit selling price",
         "Promotion flag (0/1)",
-        "Sales previous day",
+        "Previous day sales",
         "Sales 7 days ago",
-        "7-day rolling mean of demand",
+        "7-day rolling average demand",
         "Predicted demand",
         "Lower confidence interval",
         "Upper confidence interval"
@@ -124,7 +73,7 @@ def data_profiling(df):
         "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
         "Missing Values (%)": round(df.isnull().mean().mean() * 100, 2),
         "Zero Sales (%)": round((df["daily_sales"] == 0).mean() * 100, 2),
-        "Average Sales": round(df["daily_sales"].mean(), 2),
+        "Average Daily Sales": round(df["daily_sales"].mean(), 2),
         "Sales Volatility": round(df["daily_sales"].std(), 2)
     }
 
@@ -132,14 +81,14 @@ def data_profiling(df):
 # FEATURE ENGINEERING
 # ======================================================================================
 def feature_engineering(df):
+
     df = df.sort_values(["product_id", "date"])
 
     df["lag_sales_1"] = df.groupby("product_id")["daily_sales"].shift(1)
     df["lag_sales_7"] = df.groupby("product_id")["daily_sales"].shift(7)
     df["rolling_mean_7"] = (
         df.groupby("product_id")["daily_sales"]
-        .rolling(7)
-        .mean()
+        .rolling(7).mean()
         .reset_index(level=0, drop=True)
     )
 
@@ -183,6 +132,51 @@ def train_models(X_train, y_train, X_test, y_test):
     return results_df, best_model, predictions[best_model]
 
 # ======================================================================================
+# RULE-BASED AI INSIGHTS ENGINE (NO API)
+# ======================================================================================
+def generate_ai_insights(df, results_df, best_model):
+
+    insights = []
+
+    avg_demand = df["forecast_demand"].mean()
+    peak_demand = df["forecast_demand"].max()
+    volatility = (df["forecast_demand"].std() / avg_demand) * 100
+    rmse = results_df.iloc[0]["RMSE"]
+
+    # Demand insights
+    insights.append(
+        f"Average forecast demand is {avg_demand:.0f} units, "
+        f"with peak demand reaching {peak_demand:.0f} units."
+    )
+
+    # Volatility logic
+    if volatility > 30:
+        insights.append(
+            "High demand volatility detected (>30%). "
+            "Maintaining safety stock is recommended."
+        )
+    else:
+        insights.append(
+            "Demand volatility is within a manageable range, "
+            "allowing lean inventory planning."
+        )
+
+    # Model logic
+    insights.append(
+        f"{best_model} achieved the lowest RMSE ({rmse:.2f}), "
+        "indicating superior forecasting accuracy."
+    )
+
+    # Risk logic
+    if peak_demand > df["upper_bound"].mean():
+        insights.append(
+            "Peak demand exceeds confidence limits, "
+            "indicating potential stock-out risk during high-demand periods."
+        )
+
+    return insights
+
+# ======================================================================================
 # PDF REPORT
 # ======================================================================================
 def generate_pdf(metrics, insights):
@@ -200,7 +194,7 @@ def generate_pdf(metrics, insights):
         story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
 
     story.append(Spacer(1, 12))
-    story.append(Paragraph("AI-Driven Insights", styles["Heading2"]))
+    story.append(Paragraph("AI-Driven Analytical Insights", styles["Heading2"]))
     for ins in insights:
         story.append(Paragraph(ins, styles["Normal"]))
 
@@ -212,10 +206,10 @@ def generate_pdf(metrics, insights):
 # ======================================================================================
 def demand_forecasting_page():
 
-    st.header("📈 Demand Forecasting – AI Intelligence Module")
+    st.header("📈 Demand Forecasting – Intelligence Module")
 
     # ------------------------------
-    # LOAD & PROFILE DATA
+    # LOAD & PROFILE
     # ------------------------------
     df_raw = load_data()
     profile = data_profiling(df_raw)
@@ -223,7 +217,7 @@ def demand_forecasting_page():
     with st.expander("📘 Data Dictionary"):
         st.dataframe(DATA_DICTIONARY, width="stretch")
 
-    with st.expander("🔍 Data Profiling"):
+    with st.expander("🔍 Data Profiling & Quality Checks"):
         for k, v in profile.items():
             st.write(f"**{k}:** {v}")
 
@@ -252,10 +246,11 @@ def demand_forecasting_page():
     forecast_df["upper_bound"] = preds + 1.96 * std
 
     # ------------------------------
-    # KPI CARDS
+    # KPIs
     # ------------------------------
-    st.subheader("📊 Executive KPIs")
+    st.subheader("📊 Executive KPI Dashboard")
     c1, c2, c3, c4 = st.columns(4)
+
     c1.metric("Best Model", best_model)
     c2.metric("Avg Forecast", int(forecast_df["forecast_demand"].mean()))
     c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
@@ -268,11 +263,8 @@ def demand_forecasting_page():
     st.dataframe(results_df, width="stretch")
 
     fig_rmse = px.bar(
-        results_df,
-        x="Model",
-        y="RMSE",
-        text="RMSE",
-        title="RMSE Comparison Across Models"
+        results_df, x="Model", y="RMSE",
+        text="RMSE", title="RMSE Comparison Across Models"
     )
     fig_rmse.update_traces(textposition="outside")
     st.plotly_chart(fig_rmse, width="stretch")
@@ -284,16 +276,13 @@ def demand_forecasting_page():
     fdf = forecast_df[forecast_df["product_id"] == product]
 
     # ------------------------------
-    # ADVANCED CHARTS
+    # CHARTS (5+)
     # ------------------------------
     st.subheader("📈 Forecast Analysis")
 
     fig1 = px.line(
-        fdf,
-        x="date",
-        y="forecast_demand",
-        markers=True,
-        text=fdf["forecast_demand"].round(0),
+        fdf, x="date", y="forecast_demand",
+        markers=True, text=fdf["forecast_demand"].round(0),
         title="Forecast Trend"
     )
     fig1.update_traces(textposition="top center")
@@ -303,10 +292,8 @@ def demand_forecasting_page():
 
     fig4 = go.Figure()
     fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast_demand"], name="Forecast"))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"],
-                              name="Upper CI", line=dict(dash="dot")))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"],
-                              name="Lower CI", fill="tonexty"))
+    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"], name="Upper CI", line=dict(dash="dot")))
+    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"], name="Lower CI", fill="tonexty"))
     fig4.update_layout(title="Forecast with Confidence Interval")
 
     fig5 = px.box(fdf, y="forecast_demand", title="Demand Volatility")
@@ -315,21 +302,12 @@ def demand_forecasting_page():
         st.plotly_chart(fig, width="stretch")
 
     # ------------------------------
-    # INSIGHTS
+    # RULE-BASED AI INSIGHTS
     # ------------------------------
-    volatility_pct = (fdf["forecast_demand"].std() / fdf["forecast_demand"].mean()) * 100
-    avg_demand = fdf["forecast_demand"].mean()
-    peak_demand = fdf["forecast_demand"].max()
-    best_rmse = results_df.iloc[0]["RMSE"]
+    st.subheader("🤖 AI-Driven Decision Insights")
 
-    insights = [
-        f"Average demand is {avg_demand:.0f} units.",
-        f"Peak demand reaches {peak_demand:.0f} units.",
-        f"Demand volatility is {volatility_pct:.2f}%.",
-        f"{best_model} achieved the lowest RMSE of {best_rmse:.2f}."
-    ]
+    insights = generate_ai_insights(fdf, results_df, best_model)
 
-    st.subheader("🤖 AI-Driven Insights")
     for ins in insights:
         st.write("•", ins)
 
@@ -340,50 +318,12 @@ def demand_forecasting_page():
         pdf = generate_pdf(
             {
                 "Best Model": best_model,
-                "Average Demand": round(avg_demand, 2),
-                "RMSE": round(best_rmse, 2)
+                "Average Demand": round(fdf["forecast_demand"].mean(), 2),
+                "RMSE": round(results_df.iloc[0]["RMSE"], 2)
             },
             insights
         )
         with open(pdf, "rb") as f:
             st.download_button("Download PDF", f)
 
-    # ------------------------------
-    # GENAI CHATBOT
-    # ------------------------------
-    genai_context = f"""
-    Best Model: {best_model}
-    Average Demand: {avg_demand:.2f}
-    Peak Demand: {peak_demand:.2f}
-    Volatility (%): {volatility_pct:.2f}
-    RMSE: {best_rmse:.2f}
-    Insights: {"; ".join(insights)}
-    """
-
-    st.divider()
-    st.subheader("🤖 GenAI Demand Assistant")
-    st.caption(
-        "Try: Why was Random Forest selected? | "
-        "Is there stock-out risk? | "
-        "Explain confidence interval | "
-        "How volatile is demand?"
-    )
-
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-
-    user_input = st.chat_input("Ask about demand, models, risks, insights...")
-
-    if user_input:
-        reply = genai_response(user_input, genai_context)
-        st.session_state.chat_history.append(
-            {"user": user_input, "assistant": reply}
-        )
-
-    st.session_state.chat_history = st.session_state.chat_history[-10:]
-
-    for chat in st.session_state.chat_history:
-        with st.chat_message("user"):
-            st.write(chat["user"])
-        with st.chat_message("assistant"):
-            st.write(chat["assistant"])
+    st.success("✅ Demand Forecasting Module Completed Successfully")
