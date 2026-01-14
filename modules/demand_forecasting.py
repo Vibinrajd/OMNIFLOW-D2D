@@ -60,6 +60,9 @@ DATA_DICTIONARY = pd.DataFrame({
 # ======================================================================================
 # HUGGING FACE GEN-AI FUNCTION
 # ======================================================================================
+# ======================================================================================
+# HUGGING FACE GEN-AI (CONVERSATIONAL – FIXED)
+# ======================================================================================
 def hf_genai_response(user_query, context):
 
     token = st.secrets.get("HF_API_TOKEN", None)
@@ -73,31 +76,34 @@ def hf_genai_response(user_query, context):
             token=token
         )
 
-        prompt = f"""
-You are a senior supply chain analytics expert.
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a senior supply chain analytics expert.\n\n"
+                    "Use ONLY the provided context.\n"
+                    "Explain ML outputs clearly.\n"
+                    "Give business recommendations.\n\n"
+                    f"Context:\n{context}"
+                )
+            },
+            {
+                "role": "user",
+                "content": user_query
+            }
+        ]
 
-Context (STRICT – do not hallucinate):
-{context}
-
-Rules:
-- Use only the context
-- Explain ML outputs clearly
-- Provide business recommendations
-
-Question:
-{user_query}
-"""
-
-        response = client.text_generation(
-            prompt,
-            max_new_tokens=250,
+        response = client.chat_completion(
+            messages=messages,
+            max_tokens=300,
             temperature=0.2
         )
 
-        return response.strip()
+        return response.choices[0].message.content.strip()
 
     except Exception as e:
         return f"⚠️ Hugging Face error: {str(e)}"
+
 
 # ======================================================================================
 # DATA LOADING
