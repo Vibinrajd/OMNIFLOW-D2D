@@ -343,6 +343,20 @@ def demand_forecasting_page():
         )
         with open(pdf, "rb") as f:
             st.download_button("Download PDF", f)
+    # ------------------------------
+    # GENAI CONTEXT (MUST EXIST)
+    # ------------------------------
+    genai_context = f"""
+   Demand Forecast Summary
+   Best Model: {best_model}
+   Average Demand: {avg_demand:.2f}
+   Peak Demand: {peak_demand:.2f}
+   Demand Volatility (%): {volatility_pct:.2f}
+   RMSE: {best_rmse:.2f}
+
+   Insights:
+   {"; ".join(insights)}
+   """
 
     # ----------------------------------
     # HUGGING FACE CHATBOT
