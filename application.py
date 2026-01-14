@@ -52,7 +52,7 @@ if menu == "Demand Intelligence":
     st.header("📈 Demand Intelligence")
 
     with st.spinner("Running Demand Forecasting Model..."):
-        result = demand_forecasting()
+        result = run_demand_forecasting()
 
     st.success("Demand Forecast Completed")
 
