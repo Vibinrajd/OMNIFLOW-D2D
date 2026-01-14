@@ -1,6 +1,5 @@
 # ======================================================================================
 # OmniFlow-D2D : Demand Forecasting Module (STREAMLIT PAGE MODULE)
-# ======================================================================================
 # MSc Data Science – MAJOR PROJECT
 # ======================================================================================
 
@@ -9,7 +8,6 @@
 # ------------------------------
 import os
 import warnings
-from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -53,8 +51,8 @@ DATA_DICTIONARY = pd.DataFrame({
         "Demand one week ago",
         "7-day rolling average demand",
         "Predicted future demand",
-        "Lower confidence bound",
-        "Upper confidence bound"
+        "Lower confidence bound (risk lower limit)",
+        "Upper confidence bound (risk upper limit)"
     ]
 })
 
@@ -71,15 +69,14 @@ def load_data():
 # DATA PROFILING
 # ======================================================================================
 def data_profiling(df):
-    profile = {
+    return {
         "Total Records": len(df),
         "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
         "Missing Values (%)": round(df.isnull().mean().mean() * 100, 2),
         "Zero Sales Ratio (%)": round((df["daily_sales"] == 0).mean() * 100, 2),
-        "Avg Daily Sales": round(df["daily_sales"].mean(), 2),
-        "Sales Std Dev": round(df["daily_sales"].std(), 2)
+        "Average Daily Sales": round(df["daily_sales"].mean(), 2),
+        "Sales Standard Deviation": round(df["daily_sales"].std(), 2)
     }
-    return profile
 
 # ======================================================================================
 # FEATURE ENGINEERING
@@ -114,8 +111,7 @@ def train_models(X_train, y_train, X_test, y_test):
         )
     }
 
-    results = []
-    predictions = {}
+    results, predictions = [], {}
 
     for name, model in models.items():
         model.fit(X_train, y_train)
@@ -152,7 +148,7 @@ def generate_pdf(metrics, insights):
         story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
 
     story.append(Spacer(1, 12))
-    story.append(Paragraph("<b>AI-Generated Insights</b>", styles["Heading2"]))
+    story.append(Paragraph("<b>AI-Driven Analytical Insights</b>", styles["Heading2"]))
     for ins in insights:
         story.append(Paragraph(ins, styles["Normal"]))
 
@@ -193,18 +189,19 @@ def demand_forecasting_page():
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
     # ------------------------------
-    # TRAIN MODELS
+    # MODEL TRAINING
     # ------------------------------
     results_df, best_model, preds = train_models(X_train, y_train, X_test, y_test)
 
     forecast_df = df.iloc[X_test.index].copy()
     forecast_df["forecast_demand"] = preds
+
     std = preds.std()
     forecast_df["lower_bound"] = preds - 1.96 * std
     forecast_df["upper_bound"] = preds + 1.96 * std
 
     # ------------------------------
-    # KPIs
+    # KPI CARDS
     # ------------------------------
     st.subheader("📊 Executive KPI Dashboard")
     c1, c2, c3, c4 = st.columns(4)
@@ -223,9 +220,10 @@ def demand_forecasting_page():
         results_df,
         x="Model",
         y="RMSE",
-        title="Model RMSE Comparison",
-        text="RMSE"
+        text="RMSE",
+        title="RMSE Comparison Across Models"
     )
+    fig_rmse.update_traces(textposition="outside")
     st.plotly_chart(fig_rmse, use_container_width=True)
 
     # ------------------------------
@@ -235,41 +233,120 @@ def demand_forecasting_page():
     fdf = forecast_df[forecast_df["product_id"] == product]
 
     # ------------------------------
-    # ADVANCED CHARTS (5+)
+    # ADVANCED CHARTS WITH DATA LABELS
     # ------------------------------
     st.subheader("📈 Forecast Analysis")
 
-    fig1 = px.line(fdf, x="date", y="forecast_demand", title="Forecast Trend")
-    fig2 = px.line(fdf, x="date", y="rolling_mean_7", title="Rolling Demand")
-    fig3 = px.histogram(fdf, x="forecast_demand", title="Forecast Distribution")
+    fig1 = px.line(
+        fdf,
+        x="date",
+        y="forecast_demand",
+        markers=True,
+        text=fdf["forecast_demand"].round(0),
+        title="Forecast Trend with Data Labels"
+    )
+    fig1.update_traces(textposition="top center")
+
+    fig2 = px.line(
+        fdf,
+        x="date",
+        y="rolling_mean_7",
+        title="Rolling Mean Demand Trend"
+    )
+
+    fig3 = px.histogram(
+        fdf,
+        x="forecast_demand",
+        nbins=20,
+        title="Forecast Demand Distribution"
+    )
 
     fig4 = go.Figure()
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast_demand"], name="Forecast"))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"], name="Upper CI", line=dict(dash="dot")))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"], name="Lower CI", fill="tonexty"))
+    fig4.add_trace(go.Scatter(
+        x=fdf["date"],
+        y=fdf["forecast_demand"],
+        mode="lines+markers",
+        name="Forecast",
+        text=fdf["forecast_demand"].round(0)
+    ))
+    fig4.add_trace(go.Scatter(
+        x=fdf["date"],
+        y=fdf["upper_bound"],
+        name="Upper CI",
+        line=dict(dash="dot")
+    ))
+    fig4.add_trace(go.Scatter(
+        x=fdf["date"],
+        y=fdf["lower_bound"],
+        name="Lower CI",
+        fill="tonexty"
+    ))
+    fig4.update_layout(title="Forecast with Confidence Interval")
 
-    fig5 = px.box(fdf, y="forecast_demand", title="Demand Volatility")
+    fig5 = px.box(
+        fdf,
+        y="forecast_demand",
+        title="Demand Volatility Distribution"
+    )
 
     for fig in [fig1, fig2, fig3, fig4, fig5]:
         st.plotly_chart(fig, use_container_width=True)
 
     # ------------------------------
-    # AI INSIGHTS
+    # CHART-WISE INSIGHTS
     # ------------------------------
-    st.subheader("🤖 AI-Driven Insights")
+    st.subheader("📊 Chart-wise Analytical Insights")
 
-    insights = []
-    cv = fdf["forecast_demand"].std() / fdf["forecast_demand"].mean()
+    trend_change = fdf["forecast_demand"].iloc[-1] - fdf["forecast_demand"].iloc[0]
+    volatility_pct = (fdf["forecast_demand"].std() / fdf["forecast_demand"].mean()) * 100
+    ci_width = (fdf["upper_bound"] - fdf["lower_bound"]).mean()
 
-    insights.append(
-        f"Demand coefficient of variation is {cv:.2f}, indicating "
-        f"{'high' if cv > 0.3 else 'moderate'} demand volatility."
+    st.write(f"• Forecast shows a net change of **{trend_change:.0f} units**, indicating demand trend.")
+    st.write(f"• Demand volatility is **{volatility_pct:.2f}%**, impacting inventory safety stock.")
+    st.write(f"• Average confidence interval width is **{ci_width:.2f} units**, representing uncertainty.")
+
+    # ------------------------------
+    # MODEL-WISE INSIGHTS
+    # ------------------------------
+    st.subheader("🤖 Model-wise Insights")
+
+    best_rmse = results_df.iloc[0]["RMSE"]
+    worst_rmse = results_df.iloc[-1]["RMSE"]
+
+    st.write(
+        f"• **{best_model}** achieved the lowest RMSE (**{best_rmse:.2f}**), "
+        f"outperforming the weakest model by **{(worst_rmse - best_rmse):.2f} units**."
     )
 
-    if fdf["forecast_demand"].mean() > fdf["upper_bound"].mean() * 0.9:
+    if best_model == "Random Forest":
+        st.write("• Random Forest captured non-linear demand patterns and interactions.")
+    elif best_model == "Gradient Boosting":
+        st.write("• Gradient Boosting refined predictions through sequential error correction.")
+    else:
+        st.write("• Linear Regression performed well due to strong linear demand relationships.")
+
+    # ------------------------------
+    # AI-DRIVEN BUSINESS INSIGHTS
+    # ------------------------------
+    st.subheader("🤖 AI-Driven Decision Insights")
+
+    insights = []
+    avg_demand = fdf["forecast_demand"].mean()
+    peak_demand = fdf["forecast_demand"].max()
+
+    insights.append(
+        f"Average forecast demand is **{avg_demand:.0f} units**, "
+        f"with peak demand reaching **{peak_demand:.0f} units**."
+    )
+
+    if peak_demand > fdf["upper_bound"].mean():
         insights.append(
-            "Forecast demand is approaching the upper confidence bound, "
-            "indicating potential stock-out risk."
+            "Peak demand exceeds expected confidence limits, indicating potential stock-out risk."
+        )
+
+    if volatility_pct > 30:
+        insights.append(
+            "High demand volatility suggests need for safety stock and frequent replenishment."
         )
 
     for ins in insights:
@@ -282,12 +359,17 @@ def demand_forecasting_page():
         pdf = generate_pdf(
             {
                 "Best Model": best_model,
-                "Average Forecast": round(forecast_df["forecast_demand"].mean(), 2),
-                "RMSE": round(results_df.iloc[0]["RMSE"], 2)
+                "Average Forecast": round(avg_demand, 2),
+                "RMSE": round(best_rmse, 2),
+                "Volatility (%)": round(volatility_pct, 2)
             },
             insights
         )
         with open(pdf, "rb") as f:
-            st.download_button("Download PDF", f, file_name="Demand_Forecast_Report.pdf")
+            st.download_button(
+                "Download PDF",
+                f,
+                file_name="Demand_Forecast_Report.pdf"
+            )
 
-    st.success("✅ Demand Forecasting Analysis Completed")
+    st.success("✅ Demand Forecasting Analysis Completed Successfully")
