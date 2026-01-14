@@ -49,18 +49,7 @@ menu = st.sidebar.radio(
 # PAGE ROUTING
 # --------------------------------------------------
 if menu == "Demand Intelligence":
-    st.header("📈 Demand Intelligence")
-
-    with st.spinner("Running Demand Forecasting Model..."):
-        result = run_demand_forecasting()
-
-    st.success("Demand Forecast Completed")
-
-    st.subheader("Model Comparison")
-    st.dataframe(result["model_comparison"])
-
-    st.subheader("Forecast Preview")
-    st.dataframe(result["forecast"].head())
+    demand_forecasting_page()
 
 elif menu == "Inventory Optimization":
     st.header("📦 Inventory Optimization")
