@@ -519,7 +519,7 @@ def assemble_forecast_output(
     """
     Build final forecast output for downstream modules.
     """
-    forecast_df = df.iloc[X_test.index].copy()
+    forecast_df = df.loc[X_test.index].copy()
     forecast_df["forecast_demand"] = predictions
     forecast_df["model_used"] = model_name
 
