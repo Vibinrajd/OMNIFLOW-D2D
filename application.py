@@ -15,7 +15,7 @@ if PROJECT_ROOT not in sys.path:
 # ------------------------------------------------------------------
 # CORRECT MODULE IMPORTS
 # ------------------------------------------------------------------
-from modules.demand_forecasting import run_demand_forecasting
+from modules.demand_forecasting import demand_forecasting
 from modules.inventory_optimization import inventory_analysis
 from modules.logistics_prediction import logistics_dashboard
 from modules.ai_decision_engine import ai_insights
@@ -52,7 +52,7 @@ if menu == "Demand Intelligence":
     st.header("📈 Demand Intelligence")
 
     with st.spinner("Running Demand Forecasting Model..."):
-        result = run_demand_forecasting()
+        result = demand_forecasting()
 
     st.success("Demand Forecast Completed")
 
