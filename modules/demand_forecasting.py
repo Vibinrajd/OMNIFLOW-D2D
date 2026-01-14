@@ -51,7 +51,7 @@ def genai_response(user_query, context):
 
     try:
         model = genai.GenerativeModel(
-            model_name="models/gemini-1.0-pro",   # ✅ FINAL FIX
+            model_name="gemini-1.5-flash",   # ✅ FINAL FIX
             system_instruction=(
                 "You are a senior supply chain analytics expert. "
                 "Answer strictly using the provided context. "
