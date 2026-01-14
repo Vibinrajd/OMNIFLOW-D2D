@@ -63,17 +63,21 @@ DATA_DICTIONARY = pd.DataFrame({
 # ======================================================================================
 # HUGGING FACE GEN-AI (CONVERSATIONAL – FIXED)
 # ======================================================================================
+# ======================================================================================
+# HUGGING FACE GEN-AI (NO AUTO-ROUTER – FIXED)
+# ======================================================================================
 def hf_genai_response(user_query, context):
 
-    token = st.secrets.get("HF_API_TOKEN", None)
+    hf_token = st.secrets.get("HF_API_TOKEN", None)
 
-    if token is None:
+    if hf_token is None:
         return "⚠️ Hugging Face API token not configured."
 
     try:
         client = InferenceClient(
             model="mistralai/Mistral-7B-Instruct-v0.2",
-            token=token
+            token=hf_token,
+            provider="hf-inference"   # ✅ DISABLE AUTO-ROUTER
         )
 
         messages = [
@@ -81,8 +85,8 @@ def hf_genai_response(user_query, context):
                 "role": "system",
                 "content": (
                     "You are a senior supply chain analytics expert.\n\n"
-                    "Use ONLY the provided context.\n"
-                    "Explain ML outputs clearly.\n"
+                    "Use ONLY the given context.\n"
+                    "Explain ML results clearly.\n"
                     "Give business recommendations.\n\n"
                     f"Context:\n{context}"
                 )
@@ -361,7 +365,7 @@ Insights: {"; ".join(insights)}
     user_input = st.chat_input("Ask about demand, models, risks, insights...")
 
     if user_input:
-        reply = hf_genai_response(user_input, hf_context)
+        reply = hf_genai_response(user_input, genai_context)
         st.session_state.hf_chat.append(
             {"user": user_input, "assistant": reply}
         )
