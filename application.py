@@ -1,28 +1,28 @@
 # application.py
-# OmniFlow-D2D : Streamlit Application (FINAL FIXED VERSION)
+# OmniFlow-D2D : Streamlit Application (FINAL & CORRECT)
 
 import os
 import sys
 import streamlit as st
 
-# ------------------------------------------------------------------
-# FIX PATH FOR COLAB / STREAMLIT CLOUD / LOCAL
-# ------------------------------------------------------------------
+# --------------------------------------------------
+# ENSURE PROJECT ROOT IS IN PYTHON PATH
+# --------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-# ------------------------------------------------------------------
-# CORRECT MODULE IMPORTS
-# ------------------------------------------------------------------
-from modules.demand_forecasting import demand_forecasting
+# --------------------------------------------------
+# CORRECT MODULE IMPORTS (IMPORTANT)
+# --------------------------------------------------
+from modules.demand_forecasting import run_demand_forecasting
 from modules.inventory_optimization import inventory_analysis
 from modules.logistics_prediction import logistics_dashboard
 from modules.ai_decision_engine import ai_insights
 
-# ------------------------------------------------------------------
+# --------------------------------------------------
 # STREAMLIT CONFIG
-# ------------------------------------------------------------------
+# --------------------------------------------------
 st.set_page_config(
     page_title="OmniFlow D2D",
     page_icon="📦",
@@ -32,9 +32,9 @@ st.set_page_config(
 st.title("📦 OmniFlow D2D")
 st.subheader("AI-Powered Demand-to-Delivery Optimization System")
 
-# ------------------------------------------------------------------
+# --------------------------------------------------
 # SIDEBAR NAVIGATION
-# ------------------------------------------------------------------
+# --------------------------------------------------
 menu = st.sidebar.radio(
     "Navigation",
     [
@@ -45,9 +45,9 @@ menu = st.sidebar.radio(
     ]
 )
 
-# ------------------------------------------------------------------
+# --------------------------------------------------
 # PAGE ROUTING
-# ------------------------------------------------------------------
+# --------------------------------------------------
 if menu == "Demand Intelligence":
     st.header("📈 Demand Intelligence")
 
