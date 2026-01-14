@@ -35,12 +35,11 @@ OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ======================================================================================
-# GEMINI GEN-AI HELPER FUNCTION
 # ======================================================================================
-# ======================================================================================
-# GEMINI GEN-AI HELPER FUNCTION (STABLE VERSION)
+# GEMINI GEN-AI HELPER FUNCTION (FINAL STABLE VERSION)
 # ======================================================================================
 import google.generativeai as genai
+import streamlit as st
 
 def genai_response(user_query, context):
 
@@ -52,7 +51,7 @@ def genai_response(user_query, context):
 
     try:
         model = genai.GenerativeModel(
-            model_name="gemini-pro",   # ✅ STABLE MODEL
+            model_name="models/gemini-1.0-pro",   # ✅ FINAL FIX
             system_instruction=(
                 "You are a senior supply chain analytics expert. "
                 "Answer strictly using the provided context. "
