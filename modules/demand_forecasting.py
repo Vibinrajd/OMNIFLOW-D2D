@@ -8,7 +8,8 @@
 # ------------------------------
 import os
 import warnings
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
+
 
 import numpy as np
 import pandas as pd
@@ -37,35 +38,51 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # GEN-AI HELPER FUNCTION  (GLOBAL SCOPE – VERY IMPORTANT)
 # ======================================================================================
 def genai_response(user_query, context):
-
-    api_key = st.secrets.get("OPENAI_API_KEY", None)
-    if api_key is None:
-        return "⚠️ OpenAI API key not configured."
-
-    client = OpenAI(api_key=api_key)
-
-    system_prompt = f"""
-    You are an AI supply-chain analyst.
-
-    Context (STRICT – do not hallucinate):
-    {context}
-
-    Rules:
-    - Use only given context
-    - Explain ML results clearly
-    - Give business-oriented answers
+    """
+    Context-aware GenAI response with rate-limit handling
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_query}
-        ],
-        temperature=0.2
-    )
+    api_key = st.secrets.get("OPENAI_API_KEY", None)
 
-    return response.choices[0].message.content
+    if api_key is None:
+        return "⚠️ GenAI is not configured. Please add an API key."
+
+    try:
+        client = OpenAI(api_key=api_key)
+
+        system_prompt = f"""
+        You are an AI supply-chain analyst.
+
+        Context:
+        {context}
+
+        Rules:
+        - Use only the provided context
+        - Do not hallucinate
+        - Be concise and analytical
+        """
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_query}
+            ],
+            temperature=0.2
+        )
+
+        return response.choices[0].message.content
+
+    except RateLimitError:
+        return (
+            "⚠️ GenAI usage limit reached.\n\n"
+            "Based on current analysis:\n"
+            "- Demand trend and risk insights are already displayed above\n"
+            "- Please retry after some time or upgrade API quota"
+        )
+
+    except Exception as e:
+        return f"⚠️ GenAI unavailable due to an unexpected error: {str(e)}"
 
 # ======================================================================================
 # DATA DICTIONARY
@@ -311,10 +328,12 @@ def demand_forecasting_page():
     user_input = st.chat_input("Ask about demand, models, risks, insights...")
 
     if user_input:
+    with st.spinner("Analyzing with GenAI..."):
         reply = genai_response(user_input, genai_context)
-        st.session_state.chat_history.append(
-            {"user": user_input, "assistant": reply}
-        )
+
+        # Limit chat history to last 10 messages
+        st.session_state.chat_history = st.session_state.chat_history[-10:]
+
 
     for chat in st.session_state.chat_history:
         with st.chat_message("user"):
