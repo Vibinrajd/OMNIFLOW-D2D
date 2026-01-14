@@ -37,6 +37,11 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # ======================================================================================
 # GEMINI GEN-AI HELPER FUNCTION
 # ======================================================================================
+# ======================================================================================
+# GEMINI GEN-AI HELPER FUNCTION (STABLE VERSION)
+# ======================================================================================
+import google.generativeai as genai
+
 def genai_response(user_query, context):
 
     api_key = st.secrets.get("GEMINI_API_KEY", None)
@@ -45,28 +50,30 @@ def genai_response(user_query, context):
 
     genai.configure(api_key=api_key)
 
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=(
-            "You are a senior supply chain analytics expert. "
-            "Answer strictly using the provided context. "
-            "Explain ML results and business risks clearly."
-        )
-    )
-
-    prompt = f"""
-    Context:
-    {context}
-
-    Question:
-    {user_query}
-    """
-
     try:
+        model = genai.GenerativeModel(
+            model_name="gemini-pro",   # ✅ STABLE MODEL
+            system_instruction=(
+                "You are a senior supply chain analytics expert. "
+                "Answer strictly using the provided context. "
+                "Explain ML results and business risks clearly."
+            )
+        )
+
+        prompt = f"""
+        Context:
+        {context}
+
+        Question:
+        {user_query}
+        """
+
         response = model.generate_content(prompt)
         return response.text
+
     except Exception as e:
         return f"⚠️ Gemini error: {str(e)}"
+
 
 # ======================================================================================
 # DATA DICTIONARY
