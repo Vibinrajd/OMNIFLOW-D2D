@@ -8,6 +8,7 @@
 # ------------------------------
 import os
 import warnings
+from openai import OpenAI
 
 import numpy as np
 import pandas as pd
@@ -156,28 +157,36 @@ def generate_pdf(metrics, insights):
     return path
 
 
-    from openai import OpenAI
-    
-    client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", None))
+
+
+    # ======================================================================================
+    # GEN-AI HELPER FUNCTION
+    # ======================================================================================
     
     def genai_response(user_query, context):
         """
-        Context-aware GenAI response
+        Context-aware GenAI response generator
         """
     
-        if client.api_key is None:
-            return "⚠️ GenAI API key not configured."
+        # Read API key safely
+        api_key = st.secrets.get("OPENAI_API_KEY", None)
+    
+        if api_key is None:
+            return "⚠️ OpenAI API key not configured. Please add it to Streamlit secrets."
+    
+        client = OpenAI(api_key=api_key)
     
         system_prompt = f"""
         You are an AI supply-chain analyst.
     
-        Context:
+        Context (do NOT hallucinate beyond this):
         {context}
     
         Rules:
-        - Answer using the provided data
-        - Be concise, analytical, and business-focused
-        - Do not hallucinate numbers
+        - Answer only using the context
+        - Be analytical and business-focused
+        - Explain ML results and risks clearly
+        - If data is insufficient, say so
         """
     
         response = client.chat.completions.create(
@@ -391,16 +400,8 @@ def demand_forecasting_page():
         st.write("•", ins)
 
 
-    genai_context = f"""
-    Best Model: {best_model}
-    Average Forecast: {avg_demand:.2f}
-    Peak Demand: {peak_demand:.2f}
-    Volatility (%): {volatility_pct:.2f}
-    RMSE: {best_rmse:.2f}
-    
-    Key Risks:
-    {"; ".join(insights)}
-    """
+
+
 
     # ------------------------------
     # PDF DOWNLOAD
@@ -424,7 +425,18 @@ def demand_forecasting_page():
 
     st.success("✅ Demand Forecasting Analysis Completed Successfully")
 
+    genai_context = f"""
+    Best Model: {best_model}
+    Average Forecast: {avg_demand:.2f}
+    Peak Demand: {peak_demand:.2f}
+    Volatility (%): {volatility_pct:.2f}
+    RMSE: {best_rmse:.2f}
+    
+    Key Insights:
+    {"; ".join(insights)}
+    """
 
+    
     st.divider()
     st.subheader("🤖 GenAI Demand Assistant")
     
