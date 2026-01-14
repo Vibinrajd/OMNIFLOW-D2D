@@ -15,7 +15,7 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
-from openai import OpenAI, RateLimitError
+import google.generativeai as genai
 
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
@@ -35,55 +35,38 @@ OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ======================================================================================
-# GEN-AI HELPER FUNCTION (GLOBAL)
-# ======================================================================================
-# ======================================================================================
-# GEN-AI HELPER FUNCTION (GPT-3.5-TURBO)
+# GEMINI GEN-AI HELPER FUNCTION
 # ======================================================================================
 def genai_response(user_query, context):
 
-    api_key = st.secrets.get("OPENAI_API_KEY", None)
+    api_key = st.secrets.get("GEMINI_API_KEY", None)
+    if not api_key:
+        return "⚠️ Gemini API key not configured."
 
-    if api_key is None:
-        return "⚠️ OpenAI API key not configured."
+    genai.configure(api_key=api_key)
+
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=(
+            "You are a senior supply chain analytics expert. "
+            "Answer strictly using the provided context. "
+            "Explain ML results and business risks clearly."
+        )
+    )
+
+    prompt = f"""
+    Context:
+    {context}
+
+    Question:
+    {user_query}
+    """
 
     try:
-        client = OpenAI(api_key=api_key)
-
-        system_prompt = f"""
-        You are a senior supply-chain analytics expert.
-
-        Context (STRICT – do not hallucinate):
-        {context}
-
-        Rules:
-        - Answer only from the context
-        - Explain ML results clearly
-        - Give business-oriented recommendations
-        - Be concise and professional
-        """
-
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",   # ✅ TURBO MODEL
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_query}
-            ],
-            temperature=0.2,
-            max_tokens=250
-        )
-
-        return response.choices[0].message.content
-
-    except RateLimitError:
-        return (
-            "⚠️ OpenAI rate limit reached.\n\n"
-            "Please retry later. Analytical insights are already shown above."
-        )
-
+        response = model.generate_content(prompt)
+        return response.text
     except Exception as e:
-        return f"⚠️ OpenAI error: {str(e)}"
-
+        return f"⚠️ Gemini error: {str(e)}"
 
 # ======================================================================================
 # DATA DICTIONARY
@@ -217,9 +200,6 @@ def demand_forecasting_page():
 
     st.header("📈 Demand Forecasting – AI Intelligence Module")
 
-    # ------------------------------
-    # LOAD DATA
-    # ------------------------------
     df_raw = load_data()
     profile = data_profiling(df_raw)
 
@@ -230,9 +210,6 @@ def demand_forecasting_page():
         for k, v in profile.items():
             st.write(f"**{k}:** {v}")
 
-    # ------------------------------
-    # FEATURE ENGINEERING
-    # ------------------------------
     df = feature_engineering(df_raw)
 
     FEATURES = ["price", "promotion", "lag_sales_1", "lag_sales_7", "rolling_mean_7"]
@@ -242,9 +219,6 @@ def demand_forecasting_page():
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    # ------------------------------
-    # MODEL TRAINING
-    # ------------------------------
     results_df, best_model, preds = train_models(X_train, y_train, X_test, y_test)
 
     forecast_df = df.iloc[X_test.index].copy()
@@ -254,9 +228,6 @@ def demand_forecasting_page():
     forecast_df["lower_bound"] = preds - 1.96 * std
     forecast_df["upper_bound"] = preds + 1.96 * std
 
-    # ------------------------------
-    # KPI CARDS
-    # ------------------------------
     st.subheader("📊 Executive KPIs")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Best Model", best_model)
@@ -264,57 +235,23 @@ def demand_forecasting_page():
     c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
     c4.metric("Volatility", round(forecast_df["forecast_demand"].std(), 2))
 
-    # ------------------------------
-    # MODEL COMPARISON
-    # ------------------------------
     st.subheader("🤖 Model Comparison")
     st.dataframe(results_df, use_container_width=True)
 
-    fig_rmse = px.bar(
-        results_df, x="Model", y="RMSE",
-        text="RMSE", title="RMSE Comparison Across Models"
-    )
+    fig_rmse = px.bar(results_df, x="Model", y="RMSE", text="RMSE")
     fig_rmse.update_traces(textposition="outside")
     st.plotly_chart(fig_rmse, use_container_width=True)
 
-    # ------------------------------
-    # FILTER
-    # ------------------------------
     product = st.selectbox("Select Product", forecast_df["product_id"].unique())
     fdf = forecast_df[forecast_df["product_id"] == product]
 
-    # ------------------------------
-    # ADVANCED CHARTS
-    # ------------------------------
-    st.subheader("📈 Forecast Analysis")
+    fig1 = px.line(fdf, x="date", y="forecast_demand", markers=True)
+    fig2 = px.histogram(fdf, x="forecast_demand")
+    fig3 = px.box(fdf, y="forecast_demand")
 
-    fig1 = px.line(
-        fdf, x="date", y="forecast_demand",
-        markers=True, text=fdf["forecast_demand"].round(0),
-        title="Forecast Trend"
-    )
-    fig1.update_traces(textposition="top center")
-
-    fig2 = px.line(fdf, x="date", y="rolling_mean_7", title="Rolling Mean Demand")
-    fig3 = px.histogram(fdf, x="forecast_demand", title="Demand Distribution")
-
-    fig4 = go.Figure()
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast_demand"],
-                              mode="lines+markers", name="Forecast"))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"],
-                              name="Upper CI", line=dict(dash="dot")))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"],
-                              name="Lower CI", fill="tonexty"))
-    fig4.update_layout(title="Forecast with Confidence Interval")
-
-    fig5 = px.box(fdf, y="forecast_demand", title="Demand Volatility")
-
-    for fig in [fig1, fig2, fig3, fig4, fig5]:
+    for fig in [fig1, fig2, fig3]:
         st.plotly_chart(fig, use_container_width=True)
 
-    # ------------------------------
-    # INSIGHTS
-    # ------------------------------
     volatility_pct = (fdf["forecast_demand"].std() / fdf["forecast_demand"].mean()) * 100
     avg_demand = fdf["forecast_demand"].mean()
     peak_demand = fdf["forecast_demand"].max()
@@ -331,27 +268,9 @@ def demand_forecasting_page():
     for ins in insights:
         st.write("•", ins)
 
-    # ------------------------------
-    # PDF EXPORT
-    # ------------------------------
-    if st.button("📥 Download Demand Forecast Report (PDF)"):
-        pdf = generate_pdf(
-            {
-                "Best Model": best_model,
-                "Average Demand": round(avg_demand, 2),
-                "RMSE": round(best_rmse, 2)
-            },
-            insights
-        )
-        with open(pdf, "rb") as f:
-            st.download_button("Download PDF", f)
-    
-    # ------------------------------
-    # GENAI CHATBOT
-    # ------------------------------
     genai_context = f"""
     Best Model: {best_model}
-    Average Demand: {avg_demand:.2f}
+    Avg Demand: {avg_demand:.2f}
     Peak Demand: {peak_demand:.2f}
     Volatility (%): {volatility_pct:.2f}
     RMSE: {best_rmse:.2f}
@@ -359,18 +278,12 @@ def demand_forecasting_page():
     """
 
     st.divider()
-    st.subheader("🤖 GenAI Demand Assistant")
-    st.caption(
-    "Try asking: Why was Random Forest selected? | "
-    "Is there stock-out risk? | "
-    "Explain confidence interval | "
-    "How volatile is demand?"
-     )
+    st.subheader("🤖 Gemini Demand Assistant")
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    user_input = st.chat_input("Ask about demand, models, risks, insights...")
+    user_input = st.chat_input("Ask about demand, models, risks...")
 
     if user_input:
         reply = genai_response(user_input, genai_context)
@@ -378,9 +291,7 @@ def demand_forecasting_page():
             {"user": user_input, "assistant": reply}
         )
 
-    st.session_state.chat_history = st.session_state.chat_history[-10:]
-
-    for chat in st.session_state.chat_history:
+    for chat in st.session_state.chat_history[-10:]:
         with st.chat_message("user"):
             st.write(chat["user"])
         with st.chat_message("assistant"):
