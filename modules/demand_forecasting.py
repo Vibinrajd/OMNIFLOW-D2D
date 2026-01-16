@@ -204,6 +204,7 @@ def generate_pdf(metrics, insights):
 def demand_forecasting_page():
 
     st.header("📈 Demand Forecasting – AI Intelligence Module")
+    st.write("HF_API_KEY exists:", "HF_API_KEY" in st.secrets)
 
     # ------------------------------
     # LOAD & PROFILE DATA
