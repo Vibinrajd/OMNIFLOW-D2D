@@ -42,35 +42,42 @@ def hf_genai_response(user_query, context):
     if api_key is None:
         return "⚠️ Hugging Face API key not configured."
 
-    API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
-    headers = {"Authorization": f"Bearer {api_key}"}
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
 
     prompt = f"""
 You are a supply chain analytics expert.
 
-Use ONLY this context:
+Context:
 {context}
 
 Question:
 {user_query}
 
-Answer with business insights.
+Answer clearly with business reasoning:
 """
 
     payload = {
         "inputs": prompt,
         "parameters": {
-            "max_new_tokens": 250,
-            "temperature": 0.2,
-            "return_full_text": False
+            "max_new_tokens": 200,
+            "temperature": 0.2
         }
     }
 
     try:
         response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
         response.raise_for_status()
-        output = response.json()
-        return output[0]["generated_text"]
+        result = response.json()
+
+        # flan-t5 returns list[dict]
+        if isinstance(result, list) and "generated_text" in result[0]:
+            return result[0]["generated_text"]
+
+        return "⚠️ Unexpected response format from Hugging Face."
 
     except Exception as e:
         return f"⚠️ Hugging Face error: {str(e)}"
