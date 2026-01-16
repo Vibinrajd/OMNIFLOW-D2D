@@ -285,68 +285,6 @@ def demand_forecasting_page():
         f"Demand volatility is {volatility:.2f}%.",
         f"{best_model} achieved best accuracy."
     ]
-# ======================================================================================
-# LOCAL AI REASONING ENGINE (NO API, NO LIMITS)
-# ======================================================================================
-
-def local_ai_response(user_query, context_metrics):
-    q = user_query.lower()
-
-    avg = context_metrics["avg_demand"]
-    peak = context_metrics["peak_demand"]
-    volatility = context_metrics["volatility_pct"]
-    rmse = context_metrics["rmse"]
-    model = context_metrics["best_model"]
-
-    # ---- STOCK OUT ----
-    if "stock" in q or "out" in q:
-        if volatility > 30:
-            return (
-                "⚠️ There is a high stock-out risk.\n\n"
-                f"Reason: Demand volatility is {volatility:.2f}% and peak demand "
-                f"reaches {peak:.0f} units.\n\n"
-                "Recommendation: Increase safety stock and shorten replenishment cycles."
-            )
-        else:
-            return (
-                "✅ Stock-out risk is currently moderate.\n\n"
-                f"Demand volatility is {volatility:.2f}%, which is manageable."
-            )
-
-    # ---- MODEL SELECTION ----
-    if "model" in q or "random forest" in q:
-        return (
-            f"📊 {model} was selected as the best model.\n\n"
-            f"It achieved the lowest RMSE of {rmse:.2f}, indicating higher prediction accuracy "
-            "compared to other models."
-        )
-
-    # ---- VOLATILITY ----
-    if "volatility" in q or "stable" in q:
-        return (
-            f"📈 Demand volatility is {volatility:.2f}%.\n\n"
-            + ("This indicates unstable demand patterns."
-               if volatility > 30 else
-               "This indicates relatively stable demand.")
-        )
-
-    # ---- CONFIDENCE INTERVAL ----
-    if "confidence" in q or "interval" in q:
-        return (
-            "📐 Confidence intervals represent demand uncertainty.\n\n"
-            "Wider intervals indicate higher forecast risk, "
-            "which should be buffered using safety stock."
-        )
-
-    # ---- DEFAULT ----
-    return (
-        "🤖 I can help explain:\n"
-        "- Model selection\n"
-        "- Demand volatility\n"
-        "- Stock-out risk\n"
-        "- Confidence intervals\n\n"
-        "Try asking one of these."
-    )
 
     st.subheader("🤖 AI Insights")
     for ins in insights:
@@ -363,35 +301,26 @@ def local_ai_response(user_query, context_metrics):
 
     # GENAI CHAT
     st.divider()
-st.subheader("🤖 AI Demand Assistant (Offline)")
+    st.subheader("🤖 GenAI Demand Assistant")
 
-st.caption(
-    "Ask about: stock-out risk | model selection | volatility | confidence interval"
-)
+    context = f"""
+    Best Model: {best_model}
+    Average Demand: {avg_demand}
+    Peak Demand: {peak_demand}
+    Volatility: {volatility}
+    """
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
-user_input = st.chat_input("Ask your question...")
+    user_input = st.chat_input("Ask about demand, risk, or models")
 
-if user_input:
-    reply = local_ai_response(
-        user_input,
-        {
-            "avg_demand": avg_demand,
-            "peak_demand": peak_demand,
-            "volatility_pct": volatility_pct,
-            "rmse": best_rmse,
-            "best_model": best_model
-        }
-    )
+    if user_input:
+        reply = hf_genai_response(user_input, context)
+        st.session_state.chat_history.append((user_input, reply))
 
-    st.session_state.chat_history.append(
-        {"user": user_input, "assistant": reply}
-    )
-
-for chat in st.session_state.chat_history[-10:]:
-    with st.chat_message("user"):
-        st.write(chat["user"])
-    with st.chat_message("assistant"):
-        st.write(chat["assistant"])
+    for q, a in st.session_state.chat_history[-10:]:
+        with st.chat_message("user"):
+            st.write(q)
+        with st.chat_message("assistant"):
+            st.write(a)
