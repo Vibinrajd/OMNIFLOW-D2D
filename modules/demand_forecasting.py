@@ -1,49 +1,41 @@
 # ======================================================================================
-# OmniFlow-D2D : Demand Forecasting & Data Intelligence Engine
+# OmniFlow-D2D : Demand Forecasting + NLP Intelligence Module
 # MSc Data Science – MAJOR PROJECT
 # ======================================================================================
 
-# ======================================================================================
+# ------------------------------
 # IMPORTS
-# ======================================================================================
-
+# ------------------------------
 import os
-import re
-import math
 import warnings
-from typing import List, Dict
 
 import numpy as np
 import pandas as pd
 import streamlit as st
-
 import plotly.express as px
 import plotly.graph_objects as go
 
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 warnings.filterwarnings("ignore")
 
-# ======================================================================================
+# ------------------------------
 # CONFIG
-# ======================================================================================
-
+# ------------------------------
 DATA_PATH = "data/sales.csv"
+OUTPUT_DIR = "outputs"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ======================================================================================
 # DATA LOADING
 # ======================================================================================
-
 @st.cache_data
 def load_data():
-    if not os.path.exists(DATA_PATH):
-        st.error("❌ data/sales.csv not found")
-        st.stop()
-
     df = pd.read_csv(DATA_PATH)
     df["date"] = pd.to_datetime(df["date"])
     return df
@@ -51,30 +43,26 @@ def load_data():
 # ======================================================================================
 # DATA PROFILING
 # ======================================================================================
-
-def profile_data(df):
+def data_profiling(df):
     return {
         "Total Records": len(df),
-        "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
         "Products": df["product_id"].nunique(),
-        "Avg Daily Sales": round(df["daily_sales"].mean(), 2),
+        "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
+        "Average Sales": round(df["daily_sales"].mean(), 2),
         "Sales Volatility": round(df["daily_sales"].std(), 2),
-        "Zero Sales (%)": round((df["daily_sales"] == 0).mean() * 100, 2),
     }
 
 # ======================================================================================
 # FEATURE ENGINEERING
 # ======================================================================================
-
 def feature_engineering(df):
     df = df.sort_values(["product_id", "date"])
 
     df["lag_1"] = df.groupby("product_id")["daily_sales"].shift(1)
     df["lag_7"] = df.groupby("product_id")["daily_sales"].shift(7)
-    df["rolling_mean_7"] = (
+    df["rolling_7"] = (
         df.groupby("product_id")["daily_sales"]
-        .rolling(7)
-        .mean()
+        .rolling(7).mean()
         .reset_index(level=0, drop=True)
     )
 
@@ -85,20 +73,19 @@ def feature_engineering(df):
 # ======================================================================================
 # MODEL TRAINING
 # ======================================================================================
-
 def train_models(X_train, y_train, X_test, y_test):
-
     models = {
         "Linear Regression": LinearRegression(),
         "Random Forest": RandomForestRegressor(
-            n_estimators=300, max_depth=18, random_state=42, n_jobs=-1
+            n_estimators=200, max_depth=15, random_state=42
         ),
         "Gradient Boosting": GradientBoostingRegressor(
-            n_estimators=200, learning_rate=0.05, max_depth=5, random_state=42
-        ),
+            n_estimators=150, learning_rate=0.05, random_state=42
+        )
     }
 
-    results, predictions = [], {}
+    results = []
+    preds_dict = {}
 
     for name, model in models.items():
         model.fit(X_train, y_train)
@@ -107,214 +94,182 @@ def train_models(X_train, y_train, X_test, y_test):
         results.append({
             "Model": name,
             "MAE": mean_absolute_error(y_test, preds),
-            "RMSE": math.sqrt(mean_squared_error(y_test, preds)),
+            "RMSE": np.sqrt(mean_squared_error(y_test, preds)),
             "R2": r2_score(y_test, preds)
         })
 
-        predictions[name] = preds
+        preds_dict[name] = preds
 
     results_df = pd.DataFrame(results).sort_values("RMSE")
     best_model = results_df.iloc[0]["Model"]
 
-    return results_df, best_model, predictions[best_model]
+    return results_df, best_model, preds_dict[best_model]
 
 # ======================================================================================
-# ANALYTICS HELPERS
+# NLP KNOWLEDGE BASE (CORE)
 # ======================================================================================
+def build_knowledge_base(df):
+    """
+    Converts numeric sales data into natural language facts
+    """
+    knowledge = []
 
-def classify_demand_trend(fdf):
-    slope = np.polyfit(range(len(fdf)), fdf["forecast"], 1)[0]
-    if slope > 0.05:
-        return "Increasing Demand"
-    elif slope < -0.05:
-        return "Decreasing Demand"
-    else:
-        return "Stable Demand"
+    for pid, g in df.groupby("product_id"):
+        avg = g["daily_sales"].mean()
+        std = g["daily_sales"].std()
+        min_sale = g["daily_sales"].min()
+        max_sale = g["daily_sales"].max()
 
-def calculate_risk_score(fdf):
-    cv = fdf["forecast"].std() / fdf["forecast"].mean()
-    return min(100, int(cv * 100))
-
-def explain_forecast_chart(fdf):
-    trend = classify_demand_trend(fdf)
-    avg = fdf["forecast"].mean()
-    vol = fdf["forecast"].std()
-
-    return (
-        f"Demand trend is classified as {trend}. "
-        f"Average forecast demand is {avg:.2f} units with volatility {vol:.2f}. "
-        f"Confidence intervals indicate uncertainty boundaries."
-    )
-
-# ======================================================================================
-# KNOWLEDGE BASE
-# ======================================================================================
-
-def build_knowledge_base(df_raw, forecast_df):
-
-    kb = []
-
-    avg = forecast_df["forecast"].mean()
-    peak = forecast_df["forecast"].max()
-    vol = forecast_df["forecast"].std()
-    cv = vol / avg
-
-    kb.extend([
-        f"Average demand is {avg:.2f} units.",
-        f"Peak demand is {peak:.2f} units.",
-        f"Demand volatility is {vol:.2f}.",
-        f"Coefficient of variation is {cv:.2f}.",
-    ])
-
-    if cv > 0.3:
-        kb.append("Demand is highly volatile and risky.")
-    else:
-        kb.append("Demand is relatively stable.")
-
-    prod_avg = df_raw.groupby("product_id")["daily_sales"].mean()
-    prod_std = df_raw.groupby("product_id")["daily_sales"].std()
-
-    for pid in prod_avg.index:
-        kb.append(
-            f"Product {pid} has average demand {prod_avg[pid]:.2f} "
-            f"and volatility {prod_std[pid]:.2f}."
+        trend = (
+            "increasing"
+            if g["daily_sales"].iloc[-1] > g["daily_sales"].iloc[0]
+            else "decreasing"
         )
 
-    kb.extend([
-        "Random Forest handles non-linear demand patterns well.",
-        "Gradient Boosting improves forecasts iteratively.",
-        "Linear Regression assumes linear relationships.",
-        "Lower RMSE indicates better model accuracy.",
-        "High volatility products need safety stock.",
-        "Inventory buffers should match demand uncertainty."
-    ])
+        knowledge.append(
+            f"Product {pid} has average daily sales of {avg:.2f} units "
+            f"with volatility {std:.2f}. Sales range between {min_sale:.0f} "
+            f"and {max_sale:.0f} units and show a {trend} trend."
+        )
 
-    return kb
+    overall_avg = df["daily_sales"].mean()
+    overall_std = df["daily_sales"].std()
+
+    knowledge.append(
+        f"Overall average sales across all products is {overall_avg:.2f} units "
+        f"with overall volatility {overall_std:.2f}."
+    )
+
+    return knowledge
 
 # ======================================================================================
-# NLP ENGINE
+# NLP QUESTION ANSWERING ENGINE
 # ======================================================================================
+class SalesNLPQnA:
+    def __init__(self, knowledge_sentences):
+        self.sentences = knowledge_sentences
+        self.vectorizer = TfidfVectorizer()
+        self.matrix = self.vectorizer.fit_transform(self.sentences)
 
-def route_question(q):
-    q = q.lower()
-    if any(w in q for w in ["trend", "increase", "decrease"]):
-        return "trend"
-    if any(w in q for w in ["risk", "volatile"]):
-        return "risk"
-    if any(w in q for w in ["model", "accuracy", "rmse"]):
-        return "model"
-    if any(w in q for w in ["inventory", "stock"]):
-        return "inventory"
-    return "general"
-
-class DataQnAEngine:
-
-    def __init__(self, knowledge):
-        self.knowledge = knowledge
-        self.vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1,2))
-        self.matrix = self.vectorizer.fit_transform(knowledge)
-
-    def answer(self, question, fdf):
-        intent = route_question(question)
-
-        if intent == "trend":
-            return f"Demand trend is {classify_demand_trend(fdf)}."
-
-        if intent == "risk":
-            return f"Demand risk score is {calculate_risk_score(fdf)}."
-
+    def answer(self, question, top_k=3):
         q_vec = self.vectorizer.transform([question])
-        sims = cosine_similarity(q_vec, self.matrix)[0]
-        idx = sims.argmax()
+        similarity = cosine_similarity(q_vec, self.matrix).flatten()
 
-        if sims[idx] < 0.12:
-            return "Question not directly answerable from data. Please ask about demand, risk, models, or inventory."
+        top_idx = similarity.argsort()[-top_k:][::-1]
+        matched = [self.sentences[i] for i in top_idx]
 
-        return self.knowledge[idx]
+        response = "Based on sales data analysis:\n\n"
+        for m in matched:
+            response += f"• {m}\n"
+
+        return response
 
 # ======================================================================================
-# STREAMLIT PAGE
+# MAIN STREAMLIT PAGE
 # ======================================================================================
-
 def demand_forecasting_page():
 
-    st.title("📦 OmniFlow-D2D – Demand Forecasting Intelligence")
+    st.title("📈 Demand Forecasting & NLP Intelligence")
+    st.caption("Pure NLP-based question answering from sales data (No APIs)")
 
+    # ------------------------------
+    # LOAD DATA
+    # ------------------------------
     df_raw = load_data()
-    profile = profile_data(df_raw)
+    profile = data_profiling(df_raw)
 
-    with st.expander("📘 Data Profile"):
+    with st.expander("📊 Dataset Profile"):
         for k, v in profile.items():
             st.write(f"**{k}:** {v}")
 
+    # ------------------------------
+    # FEATURE ENGINEERING
+    # ------------------------------
     df = feature_engineering(df_raw)
 
-    FEATURES = ["price", "promotion", "lag_1", "lag_7", "rolling_mean_7"]
-    X, y = df[FEATURES], df["daily_sales"]
+    FEATURES = ["price", "promotion", "lag_1", "lag_7", "rolling_7"]
+    X = df[FEATURES]
+    y = df["daily_sales"]
 
     split = int(len(df) * 0.8)
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    results_df, best_model, preds = train_models(X_train, y_train, X_test, y_test)
+    # ------------------------------
+    # MODEL TRAINING
+    # ------------------------------
+    results_df, best_model, preds = train_models(
+        X_train, y_train, X_test, y_test
+    )
 
     forecast_df = df.iloc[X_test.index].copy()
     forecast_df["forecast"] = preds
-    std = preds.std()
-    forecast_df["lower"] = preds - 1.96 * std
-    forecast_df["upper"] = preds + 1.96 * std
 
+    # ------------------------------
+    # KPI CARDS
+    # ------------------------------
     st.subheader("📊 Executive KPIs")
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     c1.metric("Best Model", best_model)
     c2.metric("Avg Forecast", int(forecast_df["forecast"].mean()))
     c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
-    c4.metric("Risk Score", calculate_risk_score(forecast_df))
 
+    # ------------------------------
+    # MODEL COMPARISON
+    # ------------------------------
     st.subheader("🤖 Model Comparison")
-    st.dataframe(results_df)
+    st.dataframe(results_df, width="stretch")
 
-    st.plotly_chart(
-        px.bar(results_df, x="Model", y="RMSE", text="RMSE"),
-        width="stretch"
+    fig_rmse = px.bar(
+        results_df, x="Model", y="RMSE",
+        title="RMSE Comparison", text="RMSE"
     )
+    fig_rmse.update_traces(textposition="outside")
+    st.plotly_chart(fig_rmse, width="stretch")
 
-    product = st.selectbox("Select Product", forecast_df["product_id"].unique())
+    # ------------------------------
+    # FORECAST CHART
+    # ------------------------------
+    product = st.selectbox(
+        "Select Product", forecast_df["product_id"].unique()
+    )
     fdf = forecast_df[forecast_df["product_id"] == product]
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast"], name="Forecast"))
-    fig.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper"], name="Upper CI", line=dict(dash="dot")))
-    fig.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower"], name="Lower CI", fill="tonexty"))
-    fig.update_layout(title="Forecast with Confidence Interval")
+    fig_forecast = px.line(
+        fdf, x="date", y="forecast",
+        markers=True, title="Forecast Trend"
+    )
+    st.plotly_chart(fig_forecast, width="stretch")
 
-    st.plotly_chart(fig, width="stretch")
-    st.info(explain_forecast_chart(fdf))
-
-    knowledge = build_knowledge_base(df_raw, forecast_df)
-    engine = DataQnAEngine(knowledge)
-
+    # ==================================================================================
+    # NLP QUESTION ANSWERING
+    # ==================================================================================
     st.divider()
-    st.subheader("🧠 Ask Anything About Your Data")
+    st.subheader("🧠 Ask Anything About Sales Data")
+
+    knowledge = build_knowledge_base(df_raw)
+    qna_engine = SalesNLPQnA(knowledge)
+
+    st.caption(
+        "Examples:\n"
+        "- Which product has low sales?\n"
+        "- Highest demand product\n"
+        "- Which products are volatile?\n"
+        "- Products with decreasing trend\n"
+        "- Compare products"
+    )
 
     if "chat" not in st.session_state:
         st.session_state.chat = []
 
-    q = st.chat_input("Ask about demand, risk, trend, model, inventory...")
+    question = st.chat_input("Ask a question related to sales data...")
 
-    if q:
-        a = engine.answer(q, fdf)
-        st.session_state.chat.append((q, a))
+    if question:
+        answer = qna_engine.answer(question)
+        st.session_state.chat.append((question, answer))
 
     for q, a in st.session_state.chat[-10:]:
         with st.chat_message("user"):
             st.write(q)
         with st.chat_message("assistant"):
             st.write(a)
-
-# ======================================================================================
-# ENTRY POINT
-# ======================================================================================
-
-if __name__ == "__main__":
-    demand_forecasting_page()
