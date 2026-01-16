@@ -1,10 +1,6 @@
 # ======================================================================================
-# OmniFlow-D2D : Demand Forecasting + Data Intelligence Engine
+# OmniFlow-D2D : Demand Forecasting & Data Intelligence Engine
 # MSc Data Science – MAJOR PROJECT
-#
-# File  : demand_forecasting.py
-# Type  : Streamlit Page Module
-# Mode  : Offline (No API, No Limits)
 # ======================================================================================
 
 # ======================================================================================
@@ -27,7 +23,6 @@ import plotly.graph_objects as go
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -44,7 +39,7 @@ DATA_PATH = "data/sales.csv"
 # ======================================================================================
 
 @st.cache_data
-def load_data() -> pd.DataFrame:
+def load_data():
     if not os.path.exists(DATA_PATH):
         st.error("❌ data/sales.csv not found")
         st.stop()
@@ -57,21 +52,21 @@ def load_data() -> pd.DataFrame:
 # DATA PROFILING
 # ======================================================================================
 
-def profile_data(df: pd.DataFrame) -> Dict:
+def profile_data(df):
     return {
         "Total Records": len(df),
         "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
-        "Number of Products": df["product_id"].nunique(),
-        "Average Daily Sales": round(df["daily_sales"].mean(), 2),
+        "Products": df["product_id"].nunique(),
+        "Avg Daily Sales": round(df["daily_sales"].mean(), 2),
         "Sales Volatility": round(df["daily_sales"].std(), 2),
-        "Zero Sales %": round((df["daily_sales"] == 0).mean() * 100, 2),
+        "Zero Sales (%)": round((df["daily_sales"] == 0).mean() * 100, 2),
     }
 
 # ======================================================================================
 # FEATURE ENGINEERING
 # ======================================================================================
 
-def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
+def feature_engineering(df):
     df = df.sort_values(["product_id", "date"])
 
     df["lag_1"] = df.groupby("product_id")["daily_sales"].shift(1)
@@ -100,11 +95,10 @@ def train_models(X_train, y_train, X_test, y_test):
         ),
         "Gradient Boosting": GradientBoostingRegressor(
             n_estimators=200, learning_rate=0.05, max_depth=5, random_state=42
-        )
+        ),
     }
 
-    results = []
-    predictions = {}
+    results, predictions = [], {}
 
     for name, model in models.items():
         model.fit(X_train, y_train)
@@ -125,101 +119,116 @@ def train_models(X_train, y_train, X_test, y_test):
     return results_df, best_model, predictions[best_model]
 
 # ======================================================================================
-# KNOWLEDGE BASE (DATA → TEXT)
+# ANALYTICS HELPERS
 # ======================================================================================
 
-def build_knowledge_base(df_raw: pd.DataFrame, forecast_df: pd.DataFrame) -> List[str]:
+def classify_demand_trend(fdf):
+    slope = np.polyfit(range(len(fdf)), fdf["forecast"], 1)[0]
+    if slope > 0.05:
+        return "Increasing Demand"
+    elif slope < -0.05:
+        return "Decreasing Demand"
+    else:
+        return "Stable Demand"
+
+def calculate_risk_score(fdf):
+    cv = fdf["forecast"].std() / fdf["forecast"].mean()
+    return min(100, int(cv * 100))
+
+def explain_forecast_chart(fdf):
+    trend = classify_demand_trend(fdf)
+    avg = fdf["forecast"].mean()
+    vol = fdf["forecast"].std()
+
+    return (
+        f"Demand trend is classified as {trend}. "
+        f"Average forecast demand is {avg:.2f} units with volatility {vol:.2f}. "
+        f"Confidence intervals indicate uncertainty boundaries."
+    )
+
+# ======================================================================================
+# KNOWLEDGE BASE
+# ======================================================================================
+
+def build_knowledge_base(df_raw, forecast_df):
 
     kb = []
 
-    # ---------------- GLOBAL METRICS ----------------
-    avg_demand = forecast_df["forecast"].mean()
-    peak_demand = forecast_df["forecast"].max()
-    volatility = forecast_df["forecast"].std()
-    cv = volatility / avg_demand
+    avg = forecast_df["forecast"].mean()
+    peak = forecast_df["forecast"].max()
+    vol = forecast_df["forecast"].std()
+    cv = vol / avg
 
-    kb.append(f"Average forecast demand is {avg_demand:.2f} units.")
-    kb.append(f"Peak forecast demand reaches {peak_demand:.2f} units.")
-    kb.append(f"Demand volatility is {volatility:.2f}.")
-    kb.append(f"Coefficient of variation is {cv:.2f}.")
+    kb.extend([
+        f"Average demand is {avg:.2f} units.",
+        f"Peak demand is {peak:.2f} units.",
+        f"Demand volatility is {vol:.2f}.",
+        f"Coefficient of variation is {cv:.2f}.",
+    ])
 
     if cv > 0.3:
-        kb.append("Demand is highly volatile and requires higher safety stock.")
-        kb.append("High volatility increases stock-out risk.")
+        kb.append("Demand is highly volatile and risky.")
     else:
-        kb.append("Demand volatility is moderate and manageable.")
+        kb.append("Demand is relatively stable.")
 
-    # ---------------- PRODUCT LEVEL ----------------
-    product_avg = df_raw.groupby("product_id")["daily_sales"].mean()
-    product_std = df_raw.groupby("product_id")["daily_sales"].std()
+    prod_avg = df_raw.groupby("product_id")["daily_sales"].mean()
+    prod_std = df_raw.groupby("product_id")["daily_sales"].std()
 
-    high_product = product_avg.idxmax()
-    low_product = product_avg.idxmin()
-
-    kb.append(f"Highest demand product is {high_product}.")
-    kb.append(f"Lowest demand product is {low_product}.")
-
-    for pid in product_avg.index:
+    for pid in prod_avg.index:
         kb.append(
-            f"Product {pid} has average demand {product_avg[pid]:.2f} "
-            f"and volatility {product_std[pid]:.2f}."
+            f"Product {pid} has average demand {prod_avg[pid]:.2f} "
+            f"and volatility {prod_std[pid]:.2f}."
         )
 
-        if product_std[pid] / product_avg[pid] > 0.35:
-            kb.append(f"Product {pid} has high demand risk.")
-        else:
-            kb.append(f"Product {pid} has stable demand.")
-
-    # ---------------- INVENTORY ----------------
-    kb.append("Products with high volatility require safety stock.")
-    kb.append("Stock-out risk increases near upper confidence bound.")
-    kb.append("Stable demand products need less frequent replenishment.")
-    kb.append("High demand products require close monitoring.")
-
-    # ---------------- ML MODELS ----------------
-    kb.append("Random Forest captures non-linear demand patterns.")
-    kb.append("Gradient Boosting improves predictions iteratively.")
-    kb.append("Linear Regression assumes linear relationships.")
-    kb.append("Lower RMSE indicates better model performance.")
-
-    # ---------------- BUSINESS ----------------
-    kb.append("High demand and volatile products need priority management.")
-    kb.append("Inventory buffers should align with demand uncertainty.")
-    kb.append("Confidence intervals help in worst-case planning.")
+    kb.extend([
+        "Random Forest handles non-linear demand patterns well.",
+        "Gradient Boosting improves forecasts iteratively.",
+        "Linear Regression assumes linear relationships.",
+        "Lower RMSE indicates better model accuracy.",
+        "High volatility products need safety stock.",
+        "Inventory buffers should match demand uncertainty."
+    ])
 
     return kb
 
 # ======================================================================================
-# NLP QUESTION ANSWERING ENGINE
+# NLP ENGINE
 # ======================================================================================
+
+def route_question(q):
+    q = q.lower()
+    if any(w in q for w in ["trend", "increase", "decrease"]):
+        return "trend"
+    if any(w in q for w in ["risk", "volatile"]):
+        return "risk"
+    if any(w in q for w in ["model", "accuracy", "rmse"]):
+        return "model"
+    if any(w in q for w in ["inventory", "stock"]):
+        return "inventory"
+    return "general"
 
 class DataQnAEngine:
 
-    def __init__(self, knowledge: List[str]):
+    def __init__(self, knowledge):
         self.knowledge = knowledge
-        self.vectorizer = TfidfVectorizer(
-            stop_words="english",
-            ngram_range=(1, 2)
-        )
-        self.matrix = self.vectorizer.fit_transform(
-            [self._clean(k) for k in knowledge]
-        )
+        self.vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1,2))
+        self.matrix = self.vectorizer.fit_transform(knowledge)
 
-    def _clean(self, text: str) -> str:
-        text = text.lower()
-        text = re.sub(r"[^a-z0-9 ]", "", text)
-        return text
+    def answer(self, question, fdf):
+        intent = route_question(question)
 
-    def answer(self, question: str) -> str:
-        q_vec = self.vectorizer.transform([self._clean(question)])
+        if intent == "trend":
+            return f"Demand trend is {classify_demand_trend(fdf)}."
+
+        if intent == "risk":
+            return f"Demand risk score is {calculate_risk_score(fdf)}."
+
+        q_vec = self.vectorizer.transform([question])
         sims = cosine_similarity(q_vec, self.matrix)[0]
         idx = sims.argmax()
 
         if sims[idx] < 0.12:
-            return (
-                "This question cannot be answered directly from the data. "
-                "Please ask about demand, products, volatility, risk, models, or inventory."
-            )
+            return "Question not directly answerable from data. Please ask about demand, risk, models, or inventory."
 
         return self.knowledge[idx]
 
@@ -229,9 +238,8 @@ class DataQnAEngine:
 
 def demand_forecasting_page():
 
-    st.title("📦 OmniFlow-D2D : Demand Forecasting & Intelligence")
+    st.title("📦 OmniFlow-D2D – Demand Forecasting Intelligence")
 
-    # -------- LOAD DATA --------
     df_raw = load_data()
     profile = profile_data(df_raw)
 
@@ -239,21 +247,16 @@ def demand_forecasting_page():
         for k, v in profile.items():
             st.write(f"**{k}:** {v}")
 
-    # -------- FEATURE ENGINEERING --------
     df = feature_engineering(df_raw)
 
     FEATURES = ["price", "promotion", "lag_1", "lag_7", "rolling_mean_7"]
-    X = df[FEATURES]
-    y = df["daily_sales"]
+    X, y = df[FEATURES], df["daily_sales"]
 
     split = int(len(df) * 0.8)
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    # -------- MODEL TRAINING --------
-    results_df, best_model, preds = train_models(
-        X_train, y_train, X_test, y_test
-    )
+    results_df, best_model, preds = train_models(X_train, y_train, X_test, y_test)
 
     forecast_df = df.iloc[X_test.index].copy()
     forecast_df["forecast"] = preds
@@ -261,15 +264,13 @@ def demand_forecasting_page():
     forecast_df["lower"] = preds - 1.96 * std
     forecast_df["upper"] = preds + 1.96 * std
 
-    # -------- KPIs --------
     st.subheader("📊 Executive KPIs")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Best Model", best_model)
     c2.metric("Avg Forecast", int(forecast_df["forecast"].mean()))
     c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
-    c4.metric("Volatility", round(forecast_df["forecast"].std(), 2))
+    c4.metric("Risk Score", calculate_risk_score(forecast_df))
 
-    # -------- MODEL COMPARISON --------
     st.subheader("🤖 Model Comparison")
     st.dataframe(results_df)
 
@@ -278,7 +279,6 @@ def demand_forecasting_page():
         width="stretch"
     )
 
-    # -------- PRODUCT FILTER --------
     product = st.selectbox("Select Product", forecast_df["product_id"].unique())
     fdf = forecast_df[forecast_df["product_id"] == product]
 
@@ -289,27 +289,22 @@ def demand_forecasting_page():
     fig.update_layout(title="Forecast with Confidence Interval")
 
     st.plotly_chart(fig, width="stretch")
+    st.info(explain_forecast_chart(fdf))
 
-    # -------- NLP ENGINE --------
     knowledge = build_knowledge_base(df_raw, forecast_df)
     engine = DataQnAEngine(knowledge)
 
     st.divider()
     st.subheader("🧠 Ask Anything About Your Data")
 
-    st.caption(
-        "Examples: high demand product | demand risk | volatility | "
-        "inventory recommendation | model choice | stock-out risk"
-    )
-
     if "chat" not in st.session_state:
         st.session_state.chat = []
 
-    user_q = st.chat_input("Ask your question...")
+    q = st.chat_input("Ask about demand, risk, trend, model, inventory...")
 
-    if user_q:
-        answer = engine.answer(user_q)
-        st.session_state.chat.append((user_q, answer))
+    if q:
+        a = engine.answer(q, fdf)
+        st.session_state.chat.append((q, a))
 
     for q, a in st.session_state.chat[-10:]:
         with st.chat_message("user"):
