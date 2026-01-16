@@ -203,63 +203,6 @@ class SalesNLP:
             reply += f"• {r}\n"
 
         return reply
-        
-# ======================================================================================
-# ANALYTICAL QUESTION HANDLERS (DATA-DRIVEN LOGIC)
-# ======================================================================================
-
-def find_unstable_product(raw_df):
-    """
-    Identifies product with highest demand instability using CV.
-    """
-    stats = (
-        raw_df.groupby("product_id")["daily_sales"]
-        .agg(["mean", "std"])
-        .reset_index()
-    )
-
-    stats["cv"] = stats["std"] / stats["mean"]
-
-    worst = stats.sort_values("cv", ascending=False).iloc[0]
-
-    return (
-        f"Product {int(worst['product_id'])} has the most unstable demand. "
-        f"It shows high volatility of {worst['std']:.2f} units and a "
-        f"coefficient of variation of {worst['cv']:.2f}, "
-        f"indicating large fluctuations in daily sales."
-    )
-
-
-def find_stable_product(raw_df):
-    stats = (
-        raw_df.groupby("product_id")["daily_sales"]
-        .agg(["mean", "std"])
-        .reset_index()
-    )
-
-    stats["cv"] = stats["std"] / stats["mean"]
-
-    best = stats.sort_values("cv", ascending=True).iloc[0]
-
-    return (
-        f"Product {int(best['product_id'])} has the most stable demand. "
-        f"It shows low volatility ({best['std']:.2f} units) and consistent sales."
-    )
-
-
-def highest_demand_product(raw_df):
-    avg_sales = (
-        raw_df.groupby("product_id")["daily_sales"]
-        .mean()
-        .reset_index()
-        .sort_values("daily_sales", ascending=False)
-        .iloc[0]
-    )
-
-    return (
-        f"Product {int(avg_sales['product_id'])} has the highest average demand "
-        f"at {avg_sales['daily_sales']:.2f} units per day."
-    )
 
 # ======================================================================================
 # MAIN STREAMLIT PAGE
