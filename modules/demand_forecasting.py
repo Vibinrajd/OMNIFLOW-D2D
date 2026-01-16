@@ -3,13 +3,11 @@
 # MSc Data Science – MAJOR PROJECT
 # ======================================================================================
 
-# -----------------------------------
+# ----------------------------------
 # IMPORTS
-# -----------------------------------
+# ----------------------------------
 import os
 import warnings
-import requests
-
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -26,61 +24,12 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 warnings.filterwarnings("ignore")
 
-# -----------------------------------
+# ----------------------------------
 # CONFIG
-# -----------------------------------
+# ----------------------------------
 DATA_PATH = "data/sales.csv"
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# ======================================================================================
-# HUGGING FACE GEN-AI (FREE TIER – WORKING)
-# ======================================================================================
-def hf_genai_response(user_query, context):
-    api_key = st.secrets.get("HF_API_KEY", None)
-
-    if api_key is None:
-        return "⚠️ Hugging Face API key not configured."
-
-    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-
-    prompt = f"""
-You are a supply chain analytics expert.
-
-Context:
-{context}
-
-Question:
-{user_query}
-
-Answer clearly with business reasoning:
-"""
-
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 200,
-            "temperature": 0.2
-        }
-    }
-
-    try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
-        result = response.json()
-
-        # flan-t5 returns list[dict]
-        if isinstance(result, list) and "generated_text" in result[0]:
-            return result[0]["generated_text"]
-
-        return "⚠️ Unexpected response format from Hugging Face."
-
-    except Exception as e:
-        return f"⚠️ Hugging Face error: {str(e)}"
 
 # ======================================================================================
 # DATA DICTIONARY
@@ -97,12 +46,12 @@ DATA_DICTIONARY = pd.DataFrame({
         "Units sold per day",
         "Unit selling price",
         "Promotion flag (0/1)",
-        "Previous day demand",
-        "Demand one week ago",
+        "Previous day sales",
+        "Sales 7 days ago",
         "7-day rolling average demand",
-        "Predicted demand",
-        "Lower confidence bound",
-        "Upper confidence bound"
+        "Predicted future demand",
+        "Lower confidence interval",
+        "Upper confidence interval"
     ]
 })
 
@@ -124,7 +73,7 @@ def data_profiling(df):
         "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
         "Missing Values (%)": round(df.isnull().mean().mean() * 100, 2),
         "Zero Sales (%)": round((df["daily_sales"] == 0).mean() * 100, 2),
-        "Average Sales": round(df["daily_sales"].mean(), 2),
+        "Average Daily Sales": round(df["daily_sales"].mean(), 2),
         "Sales Volatility": round(df["daily_sales"].std(), 2)
     }
 
@@ -177,7 +126,50 @@ def train_models(X_train, y_train, X_test, y_test):
 
     results_df = pd.DataFrame(results).sort_values("RMSE")
     best_model = results_df.iloc[0]["Model"]
+
     return results_df, best_model, predictions[best_model]
+
+# ======================================================================================
+# LOCAL AI ENGINE (NO API)
+# ======================================================================================
+def local_ai_response(question, metrics):
+    q = question.lower()
+
+    avg = metrics["avg"]
+    peak = metrics["peak"]
+    vol = metrics["vol"]
+    rmse = metrics["rmse"]
+    model = metrics["model"]
+
+    if "model" in q:
+        return f"{model} was selected because it achieved the lowest RMSE of {rmse:.2f}, indicating superior predictive accuracy."
+
+    if "accuracy" in q or "reliable" in q:
+        return f"The model is reliable with an RMSE of {rmse:.2f}. Lower RMSE indicates reduced forecast error."
+
+    if "risk" in q or "stock" in q:
+        return (
+            "High stock-out risk detected due to high demand volatility."
+            if vol > 30 else
+            "Stock-out risk is moderate and manageable."
+        )
+
+    if "volatility" in q or "stable" in q:
+        return (
+            f"Demand volatility is {vol:.2f}%. "
+            + ("This indicates unstable demand." if vol > 30 else "Demand is relatively stable.")
+        )
+
+    if "confidence" in q:
+        return "Confidence intervals represent forecast uncertainty. Wider intervals indicate higher planning risk."
+
+    if "recommend" in q or "action" in q:
+        return "It is recommended to maintain safety stock during peak demand and monitor volatility trends."
+
+    return (
+        "I can explain model choice, demand risk, volatility, confidence intervals, "
+        "and business recommendations."
+    )
 
 # ======================================================================================
 # PDF REPORT
@@ -191,26 +183,25 @@ def generate_pdf(metrics, insights):
     story.append(Paragraph("OmniFlow-D2D Demand Forecast Report", styles["Title"]))
     story.append(Spacer(1, 12))
 
+    story.append(Paragraph("Executive Summary", styles["Heading2"]))
     for k, v in metrics.items():
         story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
 
     story.append(Spacer(1, 12))
     story.append(Paragraph("AI Insights", styles["Heading2"]))
-
-    for ins in insights:
-        story.append(Paragraph(ins, styles["Normal"]))
+    for i in insights:
+        story.append(Paragraph(i, styles["Normal"]))
 
     doc.build(story)
     return path
 
 # ======================================================================================
-# MAIN STREAMLIT PAGE FUNCTION
+# MAIN STREAMLIT PAGE
 # ======================================================================================
 def demand_forecasting_page():
 
     st.header("📈 Demand Forecasting – AI Intelligence Module")
 
-    # LOAD DATA
     df_raw = load_data()
     profile = data_profiling(df_raw)
 
@@ -221,7 +212,6 @@ def demand_forecasting_page():
         for k, v in profile.items():
             st.write(f"**{k}:** {v}")
 
-    # FEATURE ENGINEERING
     df = feature_engineering(df_raw)
 
     FEATURES = ["price", "promotion", "lag_sales_1", "lag_sales_7", "rolling_mean_7"]
@@ -231,95 +221,106 @@ def demand_forecasting_page():
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    # TRAIN MODELS
     results_df, best_model, preds = train_models(X_train, y_train, X_test, y_test)
 
     forecast_df = df.iloc[X_test.index].copy()
     forecast_df["forecast_demand"] = preds
-
     std = preds.std()
     forecast_df["lower_bound"] = preds - 1.96 * std
     forecast_df["upper_bound"] = preds + 1.96 * std
 
-    # KPI CARDS
+    # KPIs
     st.subheader("📊 Executive KPIs")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Best Model", best_model)
-    c2.metric("Avg Forecast", int(forecast_df["forecast_demand"].mean()))
+    c2.metric("Avg Demand", int(forecast_df["forecast_demand"].mean()))
     c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
-    c4.metric("Volatility", round(forecast_df["forecast_demand"].std(), 2))
+    c4.metric("Volatility (%)", round((forecast_df["forecast_demand"].std() /
+                                       forecast_df["forecast_demand"].mean()) * 100, 2))
 
-    # MODEL COMPARISON
+    # Model Comparison
     st.subheader("🤖 Model Comparison")
     st.dataframe(results_df, width="stretch")
 
-    fig_rmse = px.bar(results_df, x="Model", y="RMSE", text="RMSE")
+    fig_rmse = px.bar(results_df, x="Model", y="RMSE", text="RMSE",
+                      title="Model RMSE Comparison")
     fig_rmse.update_traces(textposition="outside")
     st.plotly_chart(fig_rmse, width="stretch")
 
-    # FILTER
+    # Filter
     product = st.selectbox("Select Product", forecast_df["product_id"].unique())
     fdf = forecast_df[forecast_df["product_id"] == product]
 
-    # CHARTS
-    fig1 = px.line(fdf, x="date", y="forecast_demand", markers=True)
-    fig2 = px.histogram(fdf, x="forecast_demand")
-    fig3 = px.box(fdf, y="forecast_demand")
+    # Charts
+    st.subheader("📈 Forecast Analysis")
 
-    fig4 = go.Figure()
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast_demand"], name="Forecast"))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"], name="Upper CI"))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"], name="Lower CI", fill="tonexty"))
+    charts = [
+        px.line(fdf, x="date", y="forecast_demand", markers=True,
+                title="Forecast Trend"),
+        px.line(fdf, x="date", y="rolling_mean_7", title="Rolling Mean"),
+        px.histogram(fdf, x="forecast_demand", title="Demand Distribution"),
+        px.box(fdf, y="forecast_demand", title="Demand Volatility")
+    ]
 
-    for fig in [fig1, fig2, fig3, fig4]:
+    ci_fig = go.Figure()
+    ci_fig.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast_demand"], name="Forecast"))
+    ci_fig.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"], name="Upper CI"))
+    ci_fig.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"], name="Lower CI",
+                                fill="tonexty"))
+    ci_fig.update_layout(title="Forecast with Confidence Interval")
+    charts.append(ci_fig)
+
+    for fig in charts:
         st.plotly_chart(fig, width="stretch")
 
-    # INSIGHTS
-    avg_demand = fdf["forecast_demand"].mean()
-    peak_demand = fdf["forecast_demand"].max()
-    volatility = (fdf["forecast_demand"].std() / avg_demand) * 100
+    # Insights
+    avg = fdf["forecast_demand"].mean()
+    peak = fdf["forecast_demand"].max()
+    vol = (fdf["forecast_demand"].std() / avg) * 100
+    rmse = results_df.iloc[0]["RMSE"]
 
     insights = [
-        f"Average demand is {avg_demand:.0f} units.",
-        f"Peak demand reaches {peak_demand:.0f} units.",
-        f"Demand volatility is {volatility:.2f}%.",
-        f"{best_model} achieved best accuracy."
+        f"Average forecast demand is {avg:.0f} units.",
+        f"Peak demand reaches {peak:.0f} units.",
+        f"Demand volatility is {vol:.2f}%.",
+        f"{best_model} provides the most accurate forecasts (RMSE {rmse:.2f})."
     ]
 
     st.subheader("🤖 AI Insights")
-    for ins in insights:
-        st.write("•", ins)
+    for i in insights:
+        st.write("•", i)
 
     # PDF
-    if st.button("📥 Download PDF Report"):
+    if st.button("📥 Download Forecast Report (PDF)"):
         pdf = generate_pdf(
-            {"Best Model": best_model, "Avg Demand": avg_demand},
+            {
+                "Best Model": best_model,
+                "Average Demand": round(avg, 2),
+                "RMSE": round(rmse, 2),
+                "Volatility (%)": round(vol, 2)
+            },
             insights
         )
         with open(pdf, "rb") as f:
             st.download_button("Download PDF", f)
 
-    # GENAI CHAT
+    # Offline Chat
     st.divider()
-    st.subheader("🤖 GenAI Demand Assistant")
+    st.subheader("🤖 AI Demand Assistant (Offline)")
 
-    context = f"""
-    Best Model: {best_model}
-    Average Demand: {avg_demand}
-    Peak Demand: {peak_demand}
-    Volatility: {volatility}
-    """
+    if "chat" not in st.session_state:
+        st.session_state.chat = []
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+    user_q = st.chat_input("Ask about model, risk, volatility, confidence interval")
 
-    user_input = st.chat_input("Ask about demand, risk, or models")
+    if user_q:
+        reply = local_ai_response(
+            user_q,
+            {"avg": avg, "peak": peak, "vol": vol, "rmse": rmse, "model": best_model}
+        )
+        st.session_state.chat.append((user_q, reply))
 
-    if user_input:
-        reply = hf_genai_response(user_input, context)
-        st.session_state.chat_history.append((user_input, reply))
-
-    for q, a in st.session_state.chat_history[-10:]:
+    for q, a in st.session_state.chat[-10:]:
         with st.chat_message("user"):
             st.write(q)
         with st.chat_message("assistant"):
