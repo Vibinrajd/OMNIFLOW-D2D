@@ -16,7 +16,7 @@ if PROJECT_ROOT not in sys.path:
 # CORRECT MODULE IMPORTS
 # --------------------------------------------------
 from modules.demand_forecasting import demand_forecasting_page
-from modules.inventory_optimization import inventory_analysis
+from modules.inventory_optimization import inventory_optimization_page
 from modules.logistics_prediction import logistics_dashboard
 from modules.ai_decision_engine import ai_insights
 
