@@ -1,22 +1,21 @@
 # ======================================================================================
-# OmniFlow-D2D : Inventory Optimization Module
+# OmniFlow-D2D : Inventory Optimization & Risk Intelligence Module
 # MSc Data Science – MAJOR PROJECT
 # ======================================================================================
-# PURPOSE:
-# - Consume Inventory master data
-# - Consume Demand Forecasting output
-# - Optimize stock levels
-# - Detect stock-out / overstock risk
-# - Recommend reorder quantity
-# - Answer natural language questions using DATA ONLY
+# DESCRIPTION:
+# - Consumes Inventory Master Data
+# - Consumes Demand Forecasting Output
+# - Calculates reorder quantity, safety stock
+# - Identifies stock-out & overstock risks
+# - Provides NLP-style Q&A (DATA-DRIVEN, NO API)
 #
-# IMPORTANT:
-# - This file does NOT run standalone
-# - It exposes ONE function: inventory_optimization_page()
+# NOTE:
+# - This is a Streamlit PAGE MODULE
+# - Called from application.py
 # ======================================================================================
 
 # ----------------------------------
-# LIBRARIES
+# IMPORTS
 # ----------------------------------
 import os
 import re
@@ -26,7 +25,7 @@ import streamlit as st
 import plotly.express as px
 
 # ----------------------------------
-# PATH CONFIG (DO NOT CHANGE)
+# PATH CONFIGURATION (DO NOT CHANGE)
 # ----------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -38,25 +37,25 @@ FORECAST_PATH = os.path.join(BASE_DIR, "outputs", "forecast_demand.csv")
 # ======================================================================================
 @st.cache_data
 def load_inventory():
-    df = pd.read_csv(INVENTORY_PATH)
-    return df
+    return pd.read_csv(INVENTORY_PATH)
 
 @st.cache_data
 def load_forecast():
-    df = pd.read_csv(FORECAST_PATH)
-    return df
+    return pd.read_csv(FORECAST_PATH)
 
 # ======================================================================================
-# INVENTORY CALCULATIONS
+# INVENTORY METRICS ENGINE
 # ======================================================================================
 def compute_inventory_metrics(inv, fc):
 
     df = inv.merge(fc, on="product_id", how="left")
 
-    # Safety stock (service level Z = 1.65 ~ 95%)
-    df["safety_stock"] = 1.65 * (
-        (df["upper_bound"] - df["lower_bound"]) / 2
-    ) * np.sqrt(df["lead_time_days"])
+    # Safety stock (95% service level)
+    df["safety_stock"] = (
+        1.65
+        * ((df["upper_bound"] - df["lower_bound"]) / 2)
+        * np.sqrt(df["lead_time_days"])
+    )
 
     # Reorder quantity
     df["reorder_qty"] = (
@@ -68,7 +67,7 @@ def compute_inventory_metrics(inv, fc):
     df["reorder_qty"] = df["reorder_qty"].apply(lambda x: max(0, int(x)))
 
     # Risk classification
-    def risk_flag(row):
+    def risk_level(row):
         if row["current_stock"] < row["lower_bound"]:
             return "🔴 High Stock-out Risk"
         elif row["current_stock"] < row["forecast_demand"]:
@@ -78,122 +77,97 @@ def compute_inventory_metrics(inv, fc):
         else:
             return "🟡 Balanced"
 
-    df["risk_status"] = df.apply(risk_flag, axis=1)
+    df["risk_status"] = df.apply(risk_level, axis=1)
 
     return df
 
 # ======================================================================================
-# NLP-LIKE QUESTION ANSWERING ENGINE (NO API)
+# NLP-STYLE QUESTION ANSWERING (RULE + DATA BASED)
 # ======================================================================================
 def inventory_nlp_engine(question, df):
 
     q = question.lower()
 
-    # ----------------------------
-    # High risk products
-    # ----------------------------
-    if re.search(r"(stock.?out|low stock|risk)", q):
+    if re.search(r"(low stock|stock.?out|risk)", q):
         risky = df[df["risk_status"] == "🔴 High Stock-out Risk"]
         if risky.empty:
             return "No products are currently at high stock-out risk."
-        return (
-            "High stock-out risk products:\n" +
-            ", ".join(risky["product_id"].astype(str))
+        return "High stock-out risk products: " + ", ".join(
+            risky["product_id"].astype(str)
         )
 
-    # ----------------------------
-    # Overstock products
-    # ----------------------------
-    if re.search(r"(over.?stock|excess)", q):
+    if re.search(r"(overstock|excess)", q):
         over = df[df["risk_status"] == "🟢 Overstock"]
         if over.empty:
-            return "No products are overstocked."
-        return (
-            "Overstocked products:\n" +
-            ", ".join(over["product_id"].astype(str))
+            return "No products are currently overstocked."
+        return "Overstocked products: " + ", ".join(
+            over["product_id"].astype(str)
         )
 
-    # ----------------------------
-    # Reorder quantity
-    # ----------------------------
-    if re.search(r"(reorder|how much to order)", q):
+    if re.search(r"(reorder|order quantity|how much)", q):
         top = df.sort_values("reorder_qty", ascending=False).head(5)
-        return (
-            "Top products requiring reorder:\n" +
-            "\n".join(
-                f"Product {r.product_id}: {r.reorder_qty} units"
-                for _, r in top.iterrows()
-            )
+        return "\n".join(
+            f"Product {r.product_id}: reorder {r.reorder_qty} units"
+            for _, r in top.iterrows()
         )
 
-    # ----------------------------
-    # Unstable / volatile demand
-    # ----------------------------
     if re.search(r"(unstable|volatile)", q):
         df["volatility"] = df["upper_bound"] - df["lower_bound"]
-        unstable = df.sort_values("volatility", ascending=False).head(3)
-        return (
-            "Products with most unstable demand:\n" +
-            "\n".join(
-                f"Product {r.product_id} (volatility {int(r.volatility)})"
-                for _, r in unstable.iterrows()
-            )
+        v = df.sort_values("volatility", ascending=False).head(3)
+        return "\n".join(
+            f"Product {r.product_id} has high demand volatility ({int(r.volatility)})"
+            for _, r in v.iterrows()
         )
 
-    # ----------------------------
-    # Warehouse level question
-    # ----------------------------
     if re.search(r"(warehouse)", q):
         wh = df.groupby("warehouse_id")["reorder_qty"].sum().reset_index()
-        return (
-            "Total reorder quantity by warehouse:\n" +
-            "\n".join(
-                f"Warehouse {r.warehouse_id}: {int(r.reorder_qty)} units"
-                for _, r in wh.iterrows()
-            )
+        return "\n".join(
+            f"Warehouse {r.warehouse_id}: reorder {int(r.reorder_qty)} units"
+            for _, r in wh.iterrows()
         )
 
-    # ----------------------------
-    # Fallback
-    # ----------------------------
     return (
         "I can answer questions like:\n"
-        "• Which products are at stock-out risk?\n"
-        "• Which products are overstocked?\n"
+        "• Which product has low stock?\n"
+        "• Which product is overstocked?\n"
         "• How much should we reorder?\n"
         "• Which product has unstable demand?\n"
         "• Warehouse-wise inventory risk"
     )
 
 # ======================================================================================
-# STREAMLIT PAGE
+# STREAMLIT PAGE FUNCTION
 # ======================================================================================
 def inventory_optimization_page():
 
     st.header("📦 Inventory Optimization & Risk Intelligence")
 
-    # ----------------------------
-    # DATA VALIDATION
-    # ----------------------------
+    # --------------------------------------------------
+    # VALIDATION CHECKS (USER-FRIENDLY)
+    # --------------------------------------------------
     if not os.path.exists(INVENTORY_PATH):
-        st.error("❌ inventory.csv not found in data/")
+        st.error("❌ inventory.csv not found in data/ folder")
         st.stop()
 
     if not os.path.exists(FORECAST_PATH):
-        st.error("❌ Run Demand Forecasting module first")
-        st.stop()
+        st.warning("⚠ Demand Forecast output not found")
+        st.info(
+            "Please run **Demand Intelligence → Demand Forecasting** first.\n\n"
+            "Inventory optimization depends on forecasted demand."
+        )
+        return
 
-    # ----------------------------
+    # --------------------------------------------------
     # LOAD DATA
-    # ----------------------------
+    # --------------------------------------------------
     inv = load_inventory()
     fc = load_forecast()
 
     df = compute_inventory_metrics(inv, fc)
 
-    # ----------------------------
+    # --------------------------------------------------
     # KPI DASHBOARD
-    # ----------------------------
+    # --------------------------------------------------
     st.subheader("📊 Executive Inventory KPIs")
 
     c1, c2, c3, c4 = st.columns(4)
@@ -202,31 +176,28 @@ def inventory_optimization_page():
         "High Risk Products",
         df[df["risk_status"] == "🔴 High Stock-out Risk"].shape[0]
     )
-
     c2.metric(
         "Overstocked Products",
         df[df["risk_status"] == "🟢 Overstock"].shape[0]
     )
-
     c3.metric(
         "Total Reorder Qty",
         int(df["reorder_qty"].sum())
     )
-
     c4.metric(
         "Avg Safety Stock",
         int(df["safety_stock"].mean())
     )
 
-    # ----------------------------
+    # --------------------------------------------------
     # INVENTORY TABLE
-    # ----------------------------
+    # --------------------------------------------------
     st.subheader("📋 Inventory Optimization Table")
     st.dataframe(df, width="stretch")
 
-    # ----------------------------
-    # RISK DISTRIBUTION
-    # ----------------------------
+    # --------------------------------------------------
+    # RISK VISUALIZATION
+    # --------------------------------------------------
     fig = px.bar(
         df,
         x="product_id",
@@ -238,9 +209,9 @@ def inventory_optimization_page():
     fig.update_traces(textposition="outside")
     st.plotly_chart(fig, width="stretch")
 
-    # ----------------------------
-    # NLP QUESTION ANSWERING
-    # ----------------------------
+    # --------------------------------------------------
+    # NLP QUESTION INTERFACE
+    # --------------------------------------------------
     st.divider()
     st.subheader("🤖 Inventory Intelligence Assistant")
 
@@ -250,7 +221,7 @@ def inventory_optimization_page():
         "• Which product is overstocked?\n"
         "• How much should we reorder?\n"
         "• Which product has unstable demand?\n"
-        "• Warehouse risk summary"
+        "• Warehouse-wise risk"
     )
 
     if "inventory_chat" not in st.session_state:
@@ -270,4 +241,4 @@ def inventory_optimization_page():
         with st.chat_message("assistant"):
             st.write(chat["a"])
 
-    st.success("✅ Inventory Optimization Completed")
+    st.success("✅ Inventory Optimization Completed Successfully")
