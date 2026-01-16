@@ -53,7 +53,7 @@ if menu == "Demand Intelligence":
 
 elif menu == "Inventory Optimization":
     st.header("📦 Inventory Optimization")
-    inventory_analysis()
+    inventory_optimization_page()
 
 elif menu == "Predictive Logistics":
     st.header("🚚 Predictive Logistics")
