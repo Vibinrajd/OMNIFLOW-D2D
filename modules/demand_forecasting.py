@@ -1,11 +1,11 @@
 # ======================================================================================
 # OmniFlow-D2D : Demand Forecasting Module (STREAMLIT PAGE MODULE)
-# MSc Data Science – MAJOR PROJECT
+# MSc Data Science – MAJOR PROJECT (FINAL)
 # ======================================================================================
 
-# -----------------------------------
+# ------------------------------
 # IMPORTS
-# -----------------------------------
+# ------------------------------
 import os
 import warnings
 
@@ -15,6 +15,8 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
+from huggingface_hub import InferenceClient
+
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -23,25 +25,22 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 
-from huggingface_hub import InferenceClient
-
 warnings.filterwarnings("ignore")
 
-# -----------------------------------
+# ------------------------------
 # CONFIG
-# -----------------------------------
+# ------------------------------
 DATA_PATH = "data/sales.csv"
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ======================================================================================
-# HUGGING FACE GEN-AI FUNCTION (FREE TIER SAFE)
+# GEN-AI HELPER FUNCTION (HUGGING FACE – FREE & STABLE)
 # ======================================================================================
 def hf_genai_response(user_query, context):
 
     api_key = st.secrets.get("HF_API_KEY", None)
-
-    if api_key is None:
+    if not api_key:
         return "⚠️ Hugging Face API key not configured."
 
     try:
@@ -55,7 +54,8 @@ def hf_genai_response(user_query, context):
                 "role": "system",
                 "content": (
                     "You are a senior supply chain analytics expert.\n"
-                    "Answer strictly using the provided context.\n\n"
+                    "Answer strictly using the given context.\n"
+                    "Explain ML results clearly and give business insights.\n\n"
                     f"Context:\n{context}"
                 )
             },
@@ -89,11 +89,11 @@ DATA_DICTIONARY = pd.DataFrame({
         "Unit selling price",
         "Promotion flag (0/1)",
         "Previous day demand",
-        "Demand one week ago",
+        "Demand 7 days ago",
         "7-day rolling average demand",
-        "Predicted future demand",
-        "Lower confidence bound",
-        "Upper confidence bound"
+        "Predicted demand",
+        "Lower confidence interval",
+        "Upper confidence interval"
     ]
 })
 
@@ -115,7 +115,7 @@ def data_profiling(df):
         "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
         "Missing Values (%)": round(df.isnull().mean().mean() * 100, 2),
         "Zero Sales (%)": round((df["daily_sales"] == 0).mean() * 100, 2),
-        "Average Daily Sales": round(df["daily_sales"].mean(), 2),
+        "Average Sales": round(df["daily_sales"].mean(), 2),
         "Sales Volatility": round(df["daily_sales"].std(), 2)
     }
 
@@ -130,8 +130,7 @@ def feature_engineering(df):
     df["lag_sales_7"] = df.groupby("product_id")["daily_sales"].shift(7)
     df["rolling_mean_7"] = (
         df.groupby("product_id")["daily_sales"]
-        .rolling(7)
-        .mean()
+        .rolling(7).mean()
         .reset_index(level=0, drop=True)
     )
 
@@ -192,7 +191,7 @@ def generate_pdf(metrics, insights):
         story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
 
     story.append(Spacer(1, 12))
-    story.append(Paragraph("AI-Driven Insights", styles["Heading2"]))
+    story.append(Paragraph("AI Insights", styles["Heading2"]))
     for ins in insights:
         story.append(Paragraph(ins, styles["Normal"]))
 
@@ -207,7 +206,7 @@ def demand_forecasting_page():
     st.header("📈 Demand Forecasting – AI Intelligence Module")
 
     # ------------------------------
-    # LOAD DATA
+    # LOAD & PROFILE DATA
     # ------------------------------
     df_raw = load_data()
     profile = data_profiling(df_raw)
@@ -302,7 +301,7 @@ def demand_forecasting_page():
         st.plotly_chart(fig, width="stretch")
 
     # ------------------------------
-    # INSIGHTS
+    # AI INSIGHTS
     # ------------------------------
     volatility_pct = (fdf["forecast_demand"].std() / fdf["forecast_demand"].mean()) * 100
     avg_demand = fdf["forecast_demand"].mean()
@@ -313,7 +312,7 @@ def demand_forecasting_page():
         f"Average demand is {avg_demand:.0f} units.",
         f"Peak demand reaches {peak_demand:.0f} units.",
         f"Demand volatility is {volatility_pct:.2f}%.",
-        f"{best_model} achieved the lowest RMSE of {best_rmse:.2f}."
+        f"{best_model} achieved lowest RMSE of {best_rmse:.2f}."
     ]
 
     st.subheader("🤖 AI-Driven Insights")
@@ -350,13 +349,6 @@ def demand_forecasting_page():
     st.divider()
     st.subheader("🤖 GenAI Demand Assistant")
 
-    st.caption(
-        "Try asking: Why was Random Forest selected? | "
-        "Is there stock-out risk? | "
-        "Explain confidence interval | "
-        "What inventory action is recommended?"
-    )
-
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
@@ -364,9 +356,7 @@ def demand_forecasting_page():
 
     if user_input:
         reply = hf_genai_response(user_input, genai_context)
-        st.session_state.chat_history.append(
-            {"user": user_input, "assistant": reply}
-        )
+        st.session_state.chat_history.append({"user": user_input, "assistant": reply})
 
     st.session_state.chat_history = st.session_state.chat_history[-10:]
 
