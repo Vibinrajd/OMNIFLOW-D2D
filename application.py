@@ -49,6 +49,7 @@ menu = st.sidebar.radio(
 # PAGE ROUTING
 # --------------------------------------------------
 if menu == "Demand Intelligence":
+    st.header("📦 Demand Intelligence")
     demand_forecasting_page()
 
 elif menu == "Inventory Optimization":
