@@ -1,21 +1,20 @@
 # ======================================================================================
 # OmniFlow-D2D : Demand Forecasting Module (STREAMLIT PAGE MODULE)
-# MSc Data Science – MAJOR PROJECT (FINAL)
+# MSc Data Science – MAJOR PROJECT
 # ======================================================================================
 
-# ------------------------------
+# -----------------------------------
 # IMPORTS
-# ------------------------------
+# -----------------------------------
 import os
 import warnings
+import requests
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-
-from huggingface_hub import InferenceClient
 
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
@@ -27,48 +26,51 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 warnings.filterwarnings("ignore")
 
-# ------------------------------
+# -----------------------------------
 # CONFIG
-# ------------------------------
+# -----------------------------------
 DATA_PATH = "data/sales.csv"
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ======================================================================================
-# GEN-AI HELPER FUNCTION (HUGGING FACE – FREE & STABLE)
+# HUGGING FACE GEN-AI (FREE TIER – WORKING)
 # ======================================================================================
 def hf_genai_response(user_query, context):
-
     api_key = st.secrets.get("HF_API_KEY", None)
-    if not api_key:
+
+    if api_key is None:
         return "⚠️ Hugging Face API key not configured."
 
+    API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    prompt = f"""
+You are a supply chain analytics expert.
+
+Use ONLY this context:
+{context}
+
+Question:
+{user_query}
+
+Answer with business insights.
+"""
+
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 250,
+            "temperature": 0.2,
+            "return_full_text": False
+        }
+    }
+
     try:
-        client = InferenceClient(
-            model="mistralai/Mistral-7B-Instruct-v0.2",
-            token=api_key
-        )
-
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a senior supply chain analytics expert.\n"
-                    "Answer strictly using the given context.\n"
-                    "Explain ML results clearly and give business insights.\n\n"
-                    f"Context:\n{context}"
-                )
-            },
-            {"role": "user", "content": user_query}
-        ]
-
-        response = client.chat_completion(
-            messages=messages,
-            max_tokens=300,
-            temperature=0.2
-        )
-
-        return response.choices[0].message["content"]
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        output = response.json()
+        return output[0]["generated_text"]
 
     except Exception as e:
         return f"⚠️ Hugging Face error: {str(e)}"
@@ -89,11 +91,11 @@ DATA_DICTIONARY = pd.DataFrame({
         "Unit selling price",
         "Promotion flag (0/1)",
         "Previous day demand",
-        "Demand 7 days ago",
+        "Demand one week ago",
         "7-day rolling average demand",
         "Predicted demand",
-        "Lower confidence interval",
-        "Upper confidence interval"
+        "Lower confidence bound",
+        "Upper confidence bound"
     ]
 })
 
@@ -123,7 +125,6 @@ def data_profiling(df):
 # FEATURE ENGINEERING
 # ======================================================================================
 def feature_engineering(df):
-
     df = df.sort_values(["product_id", "date"])
 
     df["lag_sales_1"] = df.groupby("product_id")["daily_sales"].shift(1)
@@ -142,7 +143,6 @@ def feature_engineering(df):
 # MODEL TRAINING
 # ======================================================================================
 def train_models(X_train, y_train, X_test, y_test):
-
     models = {
         "Linear Regression": LinearRegression(),
         "Random Forest": RandomForestRegressor(
@@ -170,14 +170,12 @@ def train_models(X_train, y_train, X_test, y_test):
 
     results_df = pd.DataFrame(results).sort_values("RMSE")
     best_model = results_df.iloc[0]["Model"]
-
     return results_df, best_model, predictions[best_model]
 
 # ======================================================================================
 # PDF REPORT
 # ======================================================================================
 def generate_pdf(metrics, insights):
-
     path = f"{OUTPUT_DIR}/Demand_Forecast_Report.pdf"
     doc = SimpleDocTemplate(path, pagesize=A4)
     styles = getSampleStyleSheet()
@@ -186,12 +184,12 @@ def generate_pdf(metrics, insights):
     story.append(Paragraph("OmniFlow-D2D Demand Forecast Report", styles["Title"]))
     story.append(Spacer(1, 12))
 
-    story.append(Paragraph("Executive Summary", styles["Heading2"]))
     for k, v in metrics.items():
         story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
 
     story.append(Spacer(1, 12))
     story.append(Paragraph("AI Insights", styles["Heading2"]))
+
     for ins in insights:
         story.append(Paragraph(ins, styles["Normal"]))
 
@@ -204,11 +202,8 @@ def generate_pdf(metrics, insights):
 def demand_forecasting_page():
 
     st.header("📈 Demand Forecasting – AI Intelligence Module")
-    st.write("HF_API_KEY exists:", "HF_API_KEY" in st.secrets)
 
-    # ------------------------------
-    # LOAD & PROFILE DATA
-    # ------------------------------
+    # LOAD DATA
     df_raw = load_data()
     profile = data_profiling(df_raw)
 
@@ -219,9 +214,7 @@ def demand_forecasting_page():
         for k, v in profile.items():
             st.write(f"**{k}:** {v}")
 
-    # ------------------------------
     # FEATURE ENGINEERING
-    # ------------------------------
     df = feature_engineering(df_raw)
 
     FEATURES = ["price", "promotion", "lag_sales_1", "lag_sales_7", "rolling_mean_7"]
@@ -231,9 +224,7 @@ def demand_forecasting_page():
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    # ------------------------------
-    # MODEL TRAINING
-    # ------------------------------
+    # TRAIN MODELS
     results_df, best_model, preds = train_models(X_train, y_train, X_test, y_test)
 
     forecast_df = df.iloc[X_test.index].copy()
@@ -243,9 +234,7 @@ def demand_forecasting_page():
     forecast_df["lower_bound"] = preds - 1.96 * std
     forecast_df["upper_bound"] = preds + 1.96 * std
 
-    # ------------------------------
     # KPI CARDS
-    # ------------------------------
     st.subheader("📊 Executive KPIs")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Best Model", best_model)
@@ -253,116 +242,78 @@ def demand_forecasting_page():
     c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
     c4.metric("Volatility", round(forecast_df["forecast_demand"].std(), 2))
 
-    # ------------------------------
     # MODEL COMPARISON
-    # ------------------------------
     st.subheader("🤖 Model Comparison")
     st.dataframe(results_df, width="stretch")
 
-    fig_rmse = px.bar(
-        results_df,
-        x="Model",
-        y="RMSE",
-        text="RMSE",
-        title="RMSE Comparison Across Models"
-    )
+    fig_rmse = px.bar(results_df, x="Model", y="RMSE", text="RMSE")
     fig_rmse.update_traces(textposition="outside")
     st.plotly_chart(fig_rmse, width="stretch")
 
-    # ------------------------------
     # FILTER
-    # ------------------------------
     product = st.selectbox("Select Product", forecast_df["product_id"].unique())
     fdf = forecast_df[forecast_df["product_id"] == product]
 
-    # ------------------------------
     # CHARTS
-    # ------------------------------
-    st.subheader("📈 Forecast Analysis")
-
-    fig1 = px.line(
-        fdf, x="date", y="forecast_demand",
-        markers=True, text=fdf["forecast_demand"].round(0),
-        title="Forecast Trend"
-    )
-    fig1.update_traces(textposition="top center")
-
-    fig2 = px.line(fdf, x="date", y="rolling_mean_7", title="Rolling Mean Demand")
-    fig3 = px.histogram(fdf, x="forecast_demand", title="Demand Distribution")
+    fig1 = px.line(fdf, x="date", y="forecast_demand", markers=True)
+    fig2 = px.histogram(fdf, x="forecast_demand")
+    fig3 = px.box(fdf, y="forecast_demand")
 
     fig4 = go.Figure()
     fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast_demand"], name="Forecast"))
-    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"], name="Upper CI", line=dict(dash="dot")))
+    fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"], name="Upper CI"))
     fig4.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"], name="Lower CI", fill="tonexty"))
-    fig4.update_layout(title="Forecast with Confidence Interval")
 
-    fig5 = px.box(fdf, y="forecast_demand", title="Demand Volatility")
-
-    for fig in [fig1, fig2, fig3, fig4, fig5]:
+    for fig in [fig1, fig2, fig3, fig4]:
         st.plotly_chart(fig, width="stretch")
 
-    # ------------------------------
-    # AI INSIGHTS
-    # ------------------------------
-    volatility_pct = (fdf["forecast_demand"].std() / fdf["forecast_demand"].mean()) * 100
+    # INSIGHTS
     avg_demand = fdf["forecast_demand"].mean()
     peak_demand = fdf["forecast_demand"].max()
-    best_rmse = results_df.iloc[0]["RMSE"]
+    volatility = (fdf["forecast_demand"].std() / avg_demand) * 100
 
     insights = [
         f"Average demand is {avg_demand:.0f} units.",
         f"Peak demand reaches {peak_demand:.0f} units.",
-        f"Demand volatility is {volatility_pct:.2f}%.",
-        f"{best_model} achieved lowest RMSE of {best_rmse:.2f}."
+        f"Demand volatility is {volatility:.2f}%.",
+        f"{best_model} achieved best accuracy."
     ]
 
-    st.subheader("🤖 AI-Driven Insights")
+    st.subheader("🤖 AI Insights")
     for ins in insights:
         st.write("•", ins)
 
-    # ------------------------------
-    # PDF EXPORT
-    # ------------------------------
-    if st.button("📥 Download Demand Forecast Report (PDF)"):
+    # PDF
+    if st.button("📥 Download PDF Report"):
         pdf = generate_pdf(
-            {
-                "Best Model": best_model,
-                "Average Demand": round(avg_demand, 2),
-                "RMSE": round(best_rmse, 2)
-            },
+            {"Best Model": best_model, "Avg Demand": avg_demand},
             insights
         )
         with open(pdf, "rb") as f:
             st.download_button("Download PDF", f)
 
-    # ------------------------------
-    # GENAI CHATBOT
-    # ------------------------------
-    genai_context = f"""
-    Best Model: {best_model}
-    Average Demand: {avg_demand:.2f}
-    Peak Demand: {peak_demand:.2f}
-    Volatility (%): {volatility_pct:.2f}
-    RMSE: {best_rmse:.2f}
-    Insights: {"; ".join(insights)}
-    """
-
+    # GENAI CHAT
     st.divider()
     st.subheader("🤖 GenAI Demand Assistant")
+
+    context = f"""
+    Best Model: {best_model}
+    Average Demand: {avg_demand}
+    Peak Demand: {peak_demand}
+    Volatility: {volatility}
+    """
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    user_input = st.chat_input("Ask about demand, models, risks, insights...")
+    user_input = st.chat_input("Ask about demand, risk, or models")
 
     if user_input:
-        reply = hf_genai_response(user_input, genai_context)
-        st.session_state.chat_history.append({"user": user_input, "assistant": reply})
+        reply = hf_genai_response(user_input, context)
+        st.session_state.chat_history.append((user_input, reply))
 
-    st.session_state.chat_history = st.session_state.chat_history[-10:]
-
-    for chat in st.session_state.chat_history:
+    for q, a in st.session_state.chat_history[-10:]:
         with st.chat_message("user"):
-            st.write(chat["user"])
+            st.write(q)
         with st.chat_message("assistant"):
-            st.write(chat["assistant"])
+            st.write(a)
