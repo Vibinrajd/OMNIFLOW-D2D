@@ -2,23 +2,17 @@
 # OmniFlow-D2D : Demand Forecasting Intelligence Module
 # MSc Data Science – MAJOR PROJECT
 # ======================================================================================
-# FEATURES INCLUDED (AS REQUESTED):
-# ✔ Data Dictionary
-# ✔ Data Profiling & Quality Checks
-# ✔ Feature Engineering (Lag + Rolling)
-# ✔ 3 ML Models (LR, RF, GB)
-# ✔ Model Comparison
-# ✔ Confidence Intervals
-# ✔ Executive KPIs
-# ✔ Interactive Filters
-# ✔ Forecast Visualizations
-# ✔ NLP-based Analytics Q&A (NO API, NO LLM)
-# ✔ Downloadable Output for Inventory Module
+# PURPOSE:
+# - Demand analysis & forecasting
+# - Feature engineering
+# - Multiple ML models
+# - Model comparison
+# - Confidence intervals
+# - Executive KPIs
+# - NLP-based analytics Q&A (NO API)
+# - Downloadable outputs for downstream modules
 # ======================================================================================
 
-# ---------------------------------------
-# IMPORTS
-# ---------------------------------------
 import os
 import warnings
 from typing import Dict, List
@@ -38,20 +32,23 @@ from sklearn.metrics.pairwise import cosine_similarity
 warnings.filterwarnings("ignore")
 
 # ======================================================================================
-# PATH CONFIG
+# PATH CONFIGURATION
 # ======================================================================================
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+PROJECT_ROOT = os.getcwd()
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "outputs")
 
 SALES_FILE = os.path.join(DATA_DIR, "sales.csv")
 FORECAST_FILE = os.path.join(OUTPUT_DIR, "forecast_demand.csv")
 
+os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ======================================================================================
 # DATA DICTIONARY
 # ======================================================================================
+
 DATA_DICTIONARY = pd.DataFrame({
     "Column": [
         "date", "product_id", "daily_sales", "price", "promotion",
@@ -62,11 +59,11 @@ DATA_DICTIONARY = pd.DataFrame({
         "Transaction date",
         "Unique product identifier",
         "Units sold per day",
-        "Selling price per unit",
-        "Promotion indicator (0/1)",
-        "Sales one day before",
-        "Sales seven days before",
-        "7-day rolling mean demand",
+        "Unit selling price",
+        "Promotion flag (0/1)",
+        "Previous day demand",
+        "Demand 7 days ago",
+        "7-day rolling average",
         "Predicted demand",
         "Lower confidence interval",
         "Upper confidence interval"
@@ -76,6 +73,7 @@ DATA_DICTIONARY = pd.DataFrame({
 # ======================================================================================
 # DATA LOADING
 # ======================================================================================
+
 @st.cache_data
 def load_sales_data() -> pd.DataFrame:
     df = pd.read_csv(SALES_FILE)
@@ -85,6 +83,7 @@ def load_sales_data() -> pd.DataFrame:
 # ======================================================================================
 # DATA PROFILING
 # ======================================================================================
+
 def data_profile(df: pd.DataFrame) -> Dict[str, str]:
     return {
         "Total Records": len(df),
@@ -92,12 +91,13 @@ def data_profile(df: pd.DataFrame) -> Dict[str, str]:
         "Unique Products": df["product_id"].nunique(),
         "Missing Values (%)": round(df.isnull().mean().mean() * 100, 2),
         "Average Daily Sales": round(df["daily_sales"].mean(), 2),
-        "Sales Volatility (Std)": round(df["daily_sales"].std(), 2)
+        "Sales Volatility": round(df["daily_sales"].std(), 2)
     }
 
 # ======================================================================================
 # FEATURE ENGINEERING
 # ======================================================================================
+
 def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(["product_id", "date"])
 
@@ -116,8 +116,9 @@ def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # ======================================================================================
-# MODEL TRAINING
+# MODEL TRAINING & COMPARISON
 # ======================================================================================
+
 def train_models(X_train, y_train, X_test, y_test):
 
     models = {
@@ -136,7 +137,8 @@ def train_models(X_train, y_train, X_test, y_test):
         )
     }
 
-    results, predictions = [], {}
+    results = []
+    predictions = {}
 
     for name, model in models.items():
         model.fit(X_train, y_train)
@@ -157,101 +159,88 @@ def train_models(X_train, y_train, X_test, y_test):
     return results_df, best_model, predictions[best_model]
 
 # ======================================================================================
-# NLP ANALYTICS ENGINE (RULE + DATA BASED)
+# NLP ANALYTICS ENGINE (NO API)
 # ======================================================================================
+
 class DemandAnalyticsNLP:
 
     def __init__(self, df: pd.DataFrame):
         self.df = df
-        self.kb = self._build_knowledge()
+        self.kb = self._build_kb()
         self.vectorizer = TfidfVectorizer()
         self.matrix = self.vectorizer.fit_transform(self.kb.keys())
 
-    def _build_knowledge(self) -> Dict[str, str]:
+    def _build_kb(self) -> Dict[str, str]:
         kb = {}
         g = self.df.groupby("product_id")
 
         avg = g["forecast_demand"].mean()
         std = g["forecast_demand"].std()
-        ci = g["upper_bound"].mean() - g["lower_bound"].mean()
 
-        kb["highest demand product"] = (
+        kb["which product has highest demand"] = (
             f"Product {avg.idxmax()} has the highest average demand "
             f"({avg.max():.2f} units)."
         )
 
-        kb["lowest demand product"] = (
+        kb["which product has lowest demand"] = (
             f"Product {avg.idxmin()} has the lowest average demand "
             f"({avg.min():.2f} units)."
         )
 
-        kb["unstable demand product"] = (
-            f"Product {std.idxmax()} shows the highest demand volatility "
-            f"({std.max():.2f} units)."
+        kb["which product has unstable demand"] = (
+            f"Product {std.idxmax()} shows the highest demand volatility."
         )
 
-        kb["demand risk"] = (
-            f"Product {std.idxmax()} has the highest demand risk due to "
-            f"high variability and uncertainty."
+        kb["which product has highest risk"] = (
+            f"Product {std.idxmax()} has the highest forecast risk due to volatility."
         )
 
-        kb["confidence interval"] = (
-            "Confidence interval represents uncertainty around forecasted demand "
-            "based on historical variability."
-        )
-
-        kb["monitoring product"] = (
-            f"Product {std.idxmax()} requires close monitoring due to unstable demand."
+        kb["what is confidence interval"] = (
+            "A confidence interval represents the uncertainty range around the "
+            "forecasted demand based on historical variation."
         )
 
         return kb
 
     def answer(self, question: str) -> str:
-        q = question.lower()
-        vec = self.vectorizer.transform([q])
-        sim = cosine_similarity(vec, self.matrix)
+        q_vec = self.vectorizer.transform([question.lower()])
+        sim = cosine_similarity(q_vec, self.matrix)
         idx = sim.argmax()
 
         if sim[0][idx] < 0.3:
             return (
-                "I can answer:\n"
-                "- highest demand product\n"
-                "- lowest demand product\n"
-                "- unstable demand product\n"
-                "- demand risk\n"
-                "- confidence interval\n"
-                "- monitoring product"
+                "Try asking:\n"
+                "- which product has highest demand\n"
+                "- which product has unstable demand\n"
+                "- which product has highest risk\n"
+                "- what is confidence interval"
             )
 
         return list(self.kb.values())[idx]
 
 # ======================================================================================
-# STREAMLIT PAGE
+# STREAMLIT APPLICATION
 # ======================================================================================
-def demand_forecasting_page():
 
-    st.header("📈 Demand Forecasting – Intelligence Module")
+def main():
+
+    st.set_page_config(page_title="OmniFlow-D2D | Demand Forecasting", layout="wide")
+    st.title("📈 OmniFlow-D2D – Demand Forecasting Intelligence")
 
     if not os.path.exists(SALES_FILE):
-        st.error("❌ sales.csv not found in data folder")
+        st.error("❌ sales.csv not found. Place it inside the /data folder.")
         return
 
-    # -------------------------------
-    # LOAD DATA
-    # -------------------------------
     df_raw = load_sales_data()
     profile = data_profile(df_raw)
 
     with st.expander("📘 Data Dictionary"):
-        st.dataframe(DATA_DICTIONARY, width="stretch")
+        st.dataframe(DATA_DICTIONARY, use_container_width=True)
 
     with st.expander("🔍 Data Profiling"):
         for k, v in profile.items():
             st.write(f"**{k}:** {v}")
 
-    # -------------------------------
-    # FEATURE ENGINEERING
-    # -------------------------------
     df = feature_engineering(df_raw)
 
     FEATURES = ["price", "promotion", "lag_1", "lag_7", "rolling_7"]
@@ -262,104 +251,66 @@ def demand_forecasting_page():
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    # -------------------------------
-    # TRAIN MODELS
-    # -------------------------------
-    results_df, best_model, preds = train_models(
-        X_train, y_train, X_test, y_test
-    )
+    results_df, best_model, preds = train_models(X_train, y_train, X_test, y_test)
 
-    # ✅ CORRECT ALIGNMENT (FIXED)
-    forecast_df = df.iloc[split:].copy()
+    forecast_df = df.iloc[X_test.index].copy()
     forecast_df["forecast_demand"] = preds
 
-    std = preds.std()
-    forecast_df["lower_bound"] = preds - 1.96 * std
-    forecast_df["upper_bound"] = preds + 1.96 * std
+    sigma = preds.std()
+    forecast_df["lower_bound"] = preds - 1.96 * sigma
+    forecast_df["upper_bound"] = preds + 1.96 * sigma
 
     forecast_df.to_csv(FORECAST_FILE, index=False)
 
-    # -------------------------------
     # KPIs
-    # -------------------------------
     st.subheader("📊 Executive KPIs")
     c1, c2, c3, c4 = st.columns(4)
-
     c1.metric("Best Model", best_model)
     c2.metric("Avg Forecast", int(forecast_df["forecast_demand"].mean()))
     c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
-    c4.metric("Volatility", round(forecast_df["forecast_demand"].std(), 2))
+    c4.metric("Volatility", round(sigma, 2))
 
-    # -------------------------------
-    # MODEL COMPARISON
-    # -------------------------------
+    # Model comparison
     st.subheader("🤖 Model Comparison")
-    st.dataframe(results_df, width="stretch")
+    st.dataframe(results_df, use_container_width=True)
 
-    fig_rmse = px.bar(
-        results_df,
-        x="Model",
-        y="RMSE",
-        text="RMSE",
-        title="RMSE Comparison"
-    )
-    fig_rmse.update_traces(textposition="outside")
-    st.plotly_chart(fig_rmse, width="stretch")
+    fig = px.bar(results_df, x="Model", y="RMSE", text="RMSE")
+    fig.update_traces(textposition="outside")
+    st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------------------
-    # PRODUCT FILTER
-    # -------------------------------
-    product = st.selectbox(
-        "Select Product",
-        sorted(forecast_df["product_id"].unique())
-    )
-    fdf = forecast_df[forecast_df["product_id"] == product]
+    # Forecast visualization
+    st.subheader("📈 Forecast with Confidence Interval")
+    pid = st.selectbox("Select Product ID", sorted(forecast_df["product_id"].unique()))
+    fdf = forecast_df[forecast_df["product_id"] == pid]
 
-    # -------------------------------
-    # FORECAST PLOT
-    # -------------------------------
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=fdf["date"],
-        y=fdf["forecast_demand"],
-        mode="lines+markers",
-        name="Forecast"
-    ))
-    fig.add_trace(go.Scatter(
-        x=fdf["date"],
-        y=fdf["upper_bound"],
-        name="Upper CI",
-        line=dict(dash="dot")
-    ))
-    fig.add_trace(go.Scatter(
-        x=fdf["date"],
-        y=fdf["lower_bound"],
-        name="Lower CI",
-        fill="tonexty"
-    ))
-    fig.update_layout(title="Forecast with Confidence Interval")
-    st.plotly_chart(fig, width="stretch")
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(x=fdf["date"], y=fdf["forecast_demand"], name="Forecast"))
+    fig2.add_trace(go.Scatter(x=fdf["date"], y=fdf["upper_bound"], name="Upper CI", line=dict(dash="dot")))
+    fig2.add_trace(go.Scatter(x=fdf["date"], y=fdf["lower_bound"], name="Lower CI", fill="tonexty"))
+    st.plotly_chart(fig2, use_container_width=True)
 
-    # -------------------------------
-    # DOWNLOAD
-    # -------------------------------
+    # Download
     st.download_button(
         "⬇ Download Forecast Output",
         forecast_df.to_csv(index=False),
         file_name="forecast_demand.csv"
     )
 
-    # -------------------------------
-    # NLP ANALYTICS CHAT
-    # -------------------------------
+    # NLP assistant
     st.divider()
-    st.subheader("📊 Demand Analytics Assistant")
+    st.subheader("🧠 Demand Analytics Assistant (No API)")
 
     nlp = DemandAnalyticsNLP(forecast_df)
-    q = st.chat_input("Ask questions about demand, risk, volatility...")
+    question = st.chat_input("Ask about demand, risk, volatility...")
 
-    if q:
-        with st.chat_message("assistant"):
-            st.write(nlp.answer(q))
+    if question:
+        st.write(nlp.answer(question))
 
-    st.success("✅ Demand Forecasting Completed Successfully")
+    st.success("✅ Demand Forecasting Module Executed Successfully")
+
+# ======================================================================================
+# RUN
+# ======================================================================================
+
+if __name__ == "__main__":
+    main()
