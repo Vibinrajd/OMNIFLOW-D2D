@@ -72,6 +72,18 @@ def inventory_optimization_page():
     )
 
     # ------------------------------------------------------------------------------
+    # CONVERT STOCK COLUMN TO NUMERIC (CRITICAL FIX)
+    # ------------------------------------------------------------------------------
+    inventory_df[stock_col] = (
+        inventory_df[stock_col]
+        .astype(str)
+        .str.replace(",", "", regex=False)
+        .str.extract(r"([0-9.]+)")[0]
+        .astype(float)
+    )
+
+    
+    # ------------------------------------------------------------------------------
     # JOIN DEMAND FORECAST WITH INVENTORY
     # ------------------------------------------------------------------------------
     merged_df = pd.merge(
@@ -121,6 +133,8 @@ def inventory_optimization_page():
     lead_time = st.slider("Lead Time (days)", 1, 15, 5)
 
     current_stock = data[stock_col].iloc[0]
+    st.write("Current stock (numeric):", current_stock, type(current_stock))
+
     reorder_point = (avg_demand * lead_time) + safety_stock
     order_quantity = max(0, reorder_point - current_stock)
 
