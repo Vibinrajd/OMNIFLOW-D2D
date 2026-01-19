@@ -282,3 +282,21 @@ def demand_forecasting_page():
     )
 
     st.success("✅ Demand Forecasting Completed Successfully")
+
+    # SAVE FULL FORECAST FOR DOWNSTREAM MODULES
+    FULL_FORECAST_PATH = os.path.join("data", "forecast_demand.csv")
+
+    full_output = data[
+      [
+        "date",
+        "store_id",
+        "product_id",
+        "daily_sales",
+        "forecast",
+        "lower_ci",
+        "upper_ci"
+      ]
+   ]
+
+   full_output.to_csv(FULL_FORECAST_PATH, index=False)
+
