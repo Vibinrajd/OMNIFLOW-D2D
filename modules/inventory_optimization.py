@@ -59,6 +59,15 @@ def inventory_optimization_page():
     forecast_df, inventory_df = load_data()
 
     # ------------------------------------------------------------------------------
+    # NORMALIZE MERGE KEYS (CRITICAL FIX)
+    # ------------------------------------------------------------------------------
+    for col in ["store_id", "product_id"]:
+        inventory_df[col] = inventory_df[col].astype(str)
+        forecast_df[col] = forecast_df[col].astype(str)
+
+
+    
+    # ------------------------------------------------------------------------------
     # INVENTORY COLUMN MAPPING (NO ASSUMPTIONS)
     # ------------------------------------------------------------------------------
     st.subheader("⚙ Inventory Column Mapping")
@@ -81,6 +90,7 @@ def inventory_optimization_page():
         .str.extract(r"([0-9.]+)")[0]
         .astype(float)
     )
+    
 
     
     # ------------------------------------------------------------------------------
