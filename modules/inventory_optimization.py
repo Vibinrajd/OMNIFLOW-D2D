@@ -26,7 +26,13 @@ def load_data():
     forecast_df = pd.read_csv(FORECAST_FILE)
     inventory_df = pd.read_csv(INVENTORY_FILE)
 
-    forecast_df["date"] = pd.to_datetime(forecast_df["date"])
+    # standardize column names
+    forecast_df.columns = forecast_df.columns.str.strip().str.lower()
+    inventory_df.columns = inventory_df.columns.str.strip().str.lower()
+
+    if "date" in forecast_df.columns:
+        forecast_df["date"] = pd.to_datetime(forecast_df["date"])
+
     return forecast_df, inventory_df
 
 # ======================================================================================
@@ -37,7 +43,7 @@ def inventory_optimization_page():
     st.header("📦 Inventory Optimization Module")
 
     # ------------------------------------------------------------------------------
-    # FILE VALIDATION
+    # FILE CHECK
     # ------------------------------------------------------------------------------
     if not os.path.exists(FORECAST_FILE):
         st.error("❌ forecast_demand.csv not found. Run Demand Forecasting module first.")
@@ -52,10 +58,36 @@ def inventory_optimization_page():
     # ------------------------------------------------------------------------------
     forecast_df, inventory_df = load_data()
 
-    st.subheader("🔗 Joining Demand Forecast with Inventory Master")
+    # ------------------------------------------------------------------------------
+    # DETECT STOCK COLUMN (VERY IMPORTANT)
+    # ------------------------------------------------------------------------------
+    stock_col_candidates = [
+        "current_stock",
+        "stock",
+        "stock_on_hand",
+        "inventory_level",
+        "available_stock",
+        "quantity",
+        "on_hand_qty"
+    ]
+
+    stock_col = None
+    for col in stock_col_candidates:
+        if col in inventory_df.columns:
+            stock_col = col
+            break
+
+    if stock_col is None:
+        st.error(
+            "❌ No stock column found in inventory.csv.\n"
+            "Expected one of: " + ", ".join(stock_col_candidates)
+        )
+        st.stop()
+
+    st.info(f"✅ Using stock column: **{stock_col}**")
 
     # ------------------------------------------------------------------------------
-    # JOIN (CORE PIPELINE STEP)
+    # JOIN DEMAND FORECAST WITH INVENTORY
     # ------------------------------------------------------------------------------
     merged_df = pd.merge(
         inventory_df,
@@ -64,11 +96,12 @@ def inventory_optimization_page():
         how="left"
     )
 
-    st.write("Joined Dataset Shape:", merged_df.shape)
+    st.subheader("🔗 Joined Demand–Inventory Data (Preview)")
+    st.write("Joined dataset shape:", merged_df.shape)
     st.dataframe(merged_df.head(10), use_container_width=True)
 
     # ------------------------------------------------------------------------------
-    # FILTERS (AFTER JOIN)
+    # FILTERS
     # ------------------------------------------------------------------------------
     store = st.selectbox(
         "Select Store",
@@ -88,10 +121,10 @@ def inventory_optimization_page():
     ]
 
     # ------------------------------------------------------------------------------
-    # HANDLE CASE: NO FORECAST ROWS
+    # CHECK FORECAST AVAILABILITY
     # ------------------------------------------------------------------------------
-    if data["forecast"].isna().all():
-        st.warning("⚠ No forecast available for this Store–Product yet.")
+    if "forecast" not in data.columns or data["forecast"].isna().all():
+        st.warning("⚠ No forecast available for this Store–Product combination.")
         return
 
     # ------------------------------------------------------------------------------
@@ -103,7 +136,7 @@ def inventory_optimization_page():
     lead_time = st.slider("Lead Time (days)", 1, 15, 5)
 
     reorder_point = (avg_demand * lead_time) + safety_stock
-    current_stock = data["current_stock"].iloc[0]
+    current_stock = data[stock_col].iloc[0]
 
     order_quantity = max(0, reorder_point - current_stock)
 
@@ -127,7 +160,7 @@ def inventory_optimization_page():
     output = pd.DataFrame({
         "store_id": [store],
         "product_id": [product],
-        "current_stock": [current_stock],
+        "current_stock": [round(current_stock, 2)],
         "avg_daily_demand": [round(avg_demand, 2)],
         "safety_stock": [round(safety_stock, 2)],
         "lead_time_days": [lead_time],
