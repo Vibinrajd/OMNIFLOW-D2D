@@ -26,7 +26,7 @@ from sklearn.preprocessing import LabelEncoder
 def demand_forecasting_page():
 
     st.title("📊 Demand Forecasting Intelligence")
-    st.caption("OmniFlow-D2D | SKU–Location Level Forecasting")
+    st.caption("OmniFlow-D2D | SKU–Location Level Demand Forecasting")
 
     # ==============================================================================
     # LOAD DATA
@@ -38,7 +38,7 @@ def demand_forecasting_page():
     df = load_data()
 
     # ==============================================================================
-    # COLUMN STANDARDIZATION (CRITICAL)
+    # COLUMN STANDARDIZATION
     # ==============================================================================
     df.columns = (
         df.columns
@@ -50,12 +50,9 @@ def demand_forecasting_page():
     df['date'] = pd.to_datetime(df['date'])
 
     # ==============================================================================
-    # REQUIRED COLUMN CHECK
+    # REQUIRED COLUMN VALIDATION
     # ==============================================================================
-    required_cols = [
-        'date', 'store_id', 'product_id', 'daily_sales'
-    ]
-
+    required_cols = ['date', 'store_id', 'product_id', 'daily_sales']
     missing_cols = [c for c in required_cols if c not in df.columns]
 
     if missing_cols:
@@ -63,9 +60,61 @@ def demand_forecasting_page():
         st.stop()
 
     # ==============================================================================
+    # DATA DICTIONARY  ✅ (NEW – IMPORTANT)
+    # ==============================================================================
+    st.subheader("📘 Data Dictionary")
+
+    data_dictionary = pd.DataFrame({
+        "Column Name": [
+            "date",
+            "store_id",
+            "product_id",
+            "product_category",
+            "sales_region",
+            "daily_sales",
+            "unit_price",
+            "discount_rate",
+            "promotion_flag",
+            "weather_condition",
+            "competitor_price",
+            "season"
+        ],
+        "Description": [
+            "Date of sales transaction",
+            "Unique store / outlet identifier",
+            "Unique product (SKU) identifier",
+            "Product category classification",
+            "Geographical sales region",
+            "Units sold per day (target variable)",
+            "Selling price per unit",
+            "Discount percentage applied",
+            "Promotion indicator (0 = No, 1 = Yes)",
+            "Weather condition on the day",
+            "Competitor product price",
+            "Seasonal label (Summer, Winter, etc.)"
+        ],
+        "Usage in Model": [
+            "Time index",
+            "SKU–Location granularity",
+            "SKU-level forecasting",
+            "Demand pattern grouping",
+            "Regional seasonality effect",
+            "Prediction target",
+            "Price sensitivity",
+            "Promotion impact",
+            "Demand uplift factor",
+            "External demand driver",
+            "Competitive pressure",
+            "Explicit seasonality signal"
+        ]
+    })
+
+    st.dataframe(data_dictionary, use_container_width=True)
+
+    # ==============================================================================
     # DATA PROFILING
     # ==============================================================================
-    st.subheader("🔍 Data Profiling")
+    st.subheader("🔍 Data Profiling & Quality Checks")
     st.write("Dataset Shape:", df.shape)
     st.dataframe(df.isna().sum())
 
@@ -85,7 +134,7 @@ def demand_forecasting_page():
     )
 
     # ==============================================================================
-    # LOCK BASE DATA (NEVER MODIFY THIS)
+    # LOCK BASE DATA (NEVER MODIFY)
     # ==============================================================================
     base_data = df[
         (df['store_id'] == store_id) &
@@ -97,7 +146,7 @@ def demand_forecasting_page():
         return
 
     # ==============================================================================
-    # ENCODE CATEGORICAL COLUMNS
+    # ENCODE CATEGORICAL VARIABLES
     # ==============================================================================
     categorical_cols = [
         'sales_region',
@@ -112,7 +161,7 @@ def demand_forecasting_page():
             base_data[col] = le.fit_transform(base_data[col])
 
     # ==============================================================================
-    # FEATURE ENGINEERING (ON COPY ONLY)
+    # FEATURE ENGINEERING
     # ==============================================================================
     st.subheader("⚙️ Feature Engineering")
 
@@ -127,7 +176,7 @@ def demand_forecasting_page():
 
     data.dropna(inplace=True)
 
-    st.success("Lag, rolling mean & seasonality features created")
+    st.success("Lag, rolling mean & seasonal features created")
 
     # ==============================================================================
     # FEATURE SET
@@ -153,16 +202,12 @@ def demand_forecasting_page():
     y = data['daily_sales']
 
     # ==============================================================================
-    # MODELS
+    # MODEL DEFINITIONS
     # ==============================================================================
     models = {
         "Linear Regression": LinearRegression(),
-        "Random Forest": RandomForestRegressor(
-            n_estimators=200, random_state=42
-        ),
-        "Gradient Boosting": GradientBoostingRegressor(
-            n_estimators=200, random_state=42
-        )
+        "Random Forest": RandomForestRegressor(n_estimators=200, random_state=42),
+        "Gradient Boosting": GradientBoostingRegressor(n_estimators=200, random_state=42)
     }
 
     tscv = TimeSeriesSplit(n_splits=5)
@@ -172,11 +217,7 @@ def demand_forecasting_page():
 
     for name, model in models.items():
         mae = -cross_val_score(
-            model,
-            X,
-            y,
-            cv=tscv,
-            scoring="neg_mean_absolute_error"
+            model, X, y, cv=tscv, scoring="neg_mean_absolute_error"
         ).mean()
         model_scores[name] = mae
 
@@ -192,14 +233,11 @@ def demand_forecasting_page():
     st.success(f"Best Model Selected → **{best_model_name}**")
 
     # ==============================================================================
-    # FINAL TRAINING
+    # FINAL TRAINING & FORECAST
     # ==============================================================================
     best_model.fit(X, y)
     data['forecast'] = best_model.predict(X)
 
-    # ==============================================================================
-    # CONFIDENCE INTERVALS
-    # ==============================================================================
     residuals = y - data['forecast']
     sigma = residuals.std()
 
@@ -212,51 +250,12 @@ def demand_forecasting_page():
     st.subheader("📈 Actual vs Forecast")
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=data['date'],
-        y=data['daily_sales'],
-        name="Actual"
-    ))
-    fig.add_trace(go.Scatter(
-        x=data['date'],
-        y=data['forecast'],
-        name="Forecast"
-    ))
-    fig.add_trace(go.Scatter(
-        x=data['date'],
-        y=data['upper_ci'],
-        name="Upper CI",
-        line=dict(dash="dot")
-    ))
-    fig.add_trace(go.Scatter(
-        x=data['date'],
-        y=data['lower_ci'],
-        name="Lower CI",
-        line=dict(dash="dot")
-    ))
+    fig.add_trace(go.Scatter(x=data['date'], y=data['daily_sales'], name="Actual"))
+    fig.add_trace(go.Scatter(x=data['date'], y=data['forecast'], name="Forecast"))
+    fig.add_trace(go.Scatter(x=data['date'], y=data['upper_ci'], name="Upper CI", line=dict(dash="dot")))
+    fig.add_trace(go.Scatter(x=data['date'], y=data['lower_ci'], name="Lower CI", line=dict(dash="dot")))
 
     st.plotly_chart(fig, use_container_width=True)
-
-    # ==============================================================================
-    # FEATURE IMPORTANCE
-    # ==============================================================================
-    if best_model_name != "Linear Regression":
-        st.subheader("🧠 Feature Importance")
-
-        importance = pd.DataFrame({
-            "Feature": features,
-            "Importance": best_model.feature_importances_
-        }).sort_values("Importance", ascending=False)
-
-        st.plotly_chart(
-            px.bar(
-                importance,
-                x="Importance",
-                y="Feature",
-                orientation="h"
-            ),
-            use_container_width=True
-        )
 
     # ==============================================================================
     # EXECUTIVE KPIs
@@ -269,45 +268,14 @@ def demand_forecasting_page():
     col3.metric("R² Score", round(r2_score(y, data['forecast']), 2))
 
     # ==============================================================================
-    # NLP-STYLE OFFLINE Q&A
-    # ==============================================================================
-    st.subheader("💬 Ask the Data")
-
-    query = st.text_input(
-        "Ask: highest demand | average demand | demand trend"
-    )
-
-    if query:
-        q = query.lower()
-        if "highest" in q:
-            st.info(f"Highest daily demand: {data['daily_sales'].max()}")
-        elif "average" in q:
-            st.info(f"Average daily demand: {round(data['daily_sales'].mean(), 2)}")
-        elif "trend" in q:
-            trend = (
-                "increasing 📈"
-                if data['daily_sales'].iloc[-1] > data['daily_sales'].iloc[0]
-                else "decreasing 📉"
-            )
-            st.info(f"Demand trend is {trend}")
-        else:
-            st.warning("Question not recognized")
-
-    # ==============================================================================
-    # FINAL OUTPUT (STORE_ID GUARANTEED)
+    # DOWNLOAD OUTPUT
     # ==============================================================================
     st.subheader("⬇️ Download Demand Forecast")
 
     output = data[
-        [
-            'date',
-            'store_id',
-            'product_id',
-            'daily_sales',
-            'forecast',
-            'lower_ci',
-            'upper_ci'
-        ]
+        ['date', 'store_id', 'product_id',
+         'daily_sales', 'forecast',
+         'lower_ci', 'upper_ci']
     ]
 
     st.download_button(
