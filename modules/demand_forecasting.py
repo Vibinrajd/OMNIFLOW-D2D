@@ -1,276 +1,254 @@
-# ======================================================================================
-# OmniFlow-D2D : Demand Forecasting Intelligence Module (MAJOR VERSION)
-# MSc Data Science – MAJOR PROJECT
-# ======================================================================================
-# FEATURES:
-# - Data Dictionary
-# - Data Profiling & Quality Checks
-# - Seasonality + Lag Feature Engineering
-# - Per-Product Time-Series Modeling
-# - 3 ML Models (LR, RF, GB)
-# - Model Comparison + CV Metrics
-# - Confidence Intervals
-# - Feature Importance (Explainability)
-# - Executive KPIs
-# - Advanced Charts
-# - NLP-based Analytics Q&A (DATA-ONLY, NO API)
-# - Downloadable Forecast Output
-# ======================================================================================
+# ============================================================
+# OMNIFLOW-D2D : DEMAND FORECASTING INTELLIGENCE MODULE
+# ============================================================
 
-import os
-import warnings
-import numpy as np
 import pandas as pd
-import streamlit as st
-import plotly.express as px
-import plotly.graph_objects as go
-
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
+import numpy as np
+import warnings
 warnings.filterwarnings("ignore")
 
-# ======================================================================================
-# PATH CONFIGURATION
-# ======================================================================================
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
-SALES_PATH = os.path.join(DATA_DIR, "sales.csv")
-FORECAST_PATH = os.path.join(OUTPUT_DIR, "forecast_demand.csv")
+# ------------------------------------------------------------
+# 1. LOAD SALES DATA
+# ------------------------------------------------------------
+df = pd.read_csv("sales.csv", parse_dates=["date"])
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Sort for time series
+df = df.sort_values(["store_id", "product_id", "date"])
 
-# ======================================================================================
-# DATA DICTIONARY
-# ======================================================================================
-DATA_DICTIONARY = pd.DataFrame({
-    "Column": [
-        "date","product_id","daily_sales","price","promotion",
-        "lag_1","lag_7","rolling_7",
-        "day_of_week","is_weekend","month","week_of_year",
-        "forecast_demand","lower_bound","upper_bound","risk_level"
-    ],
-    "Description": [
-        "Transaction date",
-        "Unique product identifier",
-        "Units sold per day",
-        "Unit price",
-        "Promotion flag",
-        "Sales 1 day ago",
-        "Sales 7 days ago",
-        "7-day rolling mean",
-        "Day of week (0=Mon)",
-        "Weekend indicator",
-        "Month",
-        "ISO week of year",
-        "Predicted demand",
-        "Lower confidence bound",
-        "Upper confidence bound",
-        "Demand risk category"
-    ]
+# ------------------------------------------------------------
+# 2. DATA DICTIONARY (AUTO-GENERATED)
+# ------------------------------------------------------------
+data_dictionary = pd.DataFrame({
+    "column": df.columns,
+    "dtype": df.dtypes.astype(str),
+    "missing_%": df.isnull().mean() * 100
 })
 
-# ======================================================================================
-# LOAD DATA
-# ======================================================================================
-def load_sales_data():
-    df = pd.read_csv(SALES_PATH)
-    df["date"] = pd.to_datetime(df["date"])
-    return df
+# ------------------------------------------------------------
+# 3. DATA QUALITY CHECKS
+# ------------------------------------------------------------
+assert df["daily_sales"].isnull().sum() == 0, "Target has missing values"
+assert (df["daily_sales"] >= 0).all(), "Negative sales detected"
 
-# ======================================================================================
-# DATA PROFILING
-# ======================================================================================
-def data_profile(df):
-    return {
-        "Total Records": len(df),
-        "Date Range": f"{df.date.min().date()} → {df.date.max().date()}",
-        "Unique Products": df.product_id.nunique(),
-        "Missing Values (%)": round(df.isnull().mean().mean() * 100, 2),
-        "Avg Daily Sales": round(df.daily_sales.mean(), 2),
-        "Sales Volatility": round(df.daily_sales.std(), 2)
-    }
+# ------------------------------------------------------------
+# 4. FEATURE ENGINEERING
+# ------------------------------------------------------------
 
-# ======================================================================================
-# FEATURE ENGINEERING (SEASONAL + TEMPORAL)
-# ======================================================================================
-def feature_engineering(df):
+# Calendar features
+df["weekday"] = df["date"].dt.weekday
+df["month"] = df["date"].dt.month
 
-    df = df.sort_values(["product_id", "date"])
-
-    # --- Seasonality ---
-    df["day_of_week"] = df.date.dt.dayofweek
-    df["is_weekend"] = df.day_of_week.isin([5,6]).astype(int)
-    df["month"] = df.date.dt.month
-    df["week_of_year"] = df.date.dt.isocalendar().week.astype(int)
-
-    # --- Lags ---
-    df["lag_1"] = df.groupby("product_id")["daily_sales"].shift(1)
-    df["lag_7"] = df.groupby("product_id")["daily_sales"].shift(7)
-
-    # --- Rolling ---
-    df["rolling_7"] = (
-        df.groupby("product_id")["daily_sales"]
-        .rolling(7).mean().reset_index(level=0, drop=True)
+# Lag & rolling features (PER STORE + PRODUCT)
+for lag in [1, 7, 14]:
+    df[f"lag_{lag}"] = (
+        df.groupby(["store_id", "product_id"])["daily_sales"]
+        .shift(lag)
     )
 
-    return df.dropna().reset_index(drop=True)
+df["rolling_7"] = (
+    df.groupby(["store_id", "product_id"])["daily_sales"]
+    .shift(1)
+    .rolling(7)
+    .mean()
+)
 
-# ======================================================================================
-# MODEL TRAINING (PER PRODUCT)
-# ======================================================================================
-def train_product_model(df):
+df["rolling_14"] = (
+    df.groupby(["store_id", "product_id"])["daily_sales"]
+    .shift(1)
+    .rolling(14)
+    .mean()
+)
 
-    FEATURES = [
-        "price","promotion","lag_1","lag_7","rolling_7",
-        "day_of_week","is_weekend","month","week_of_year"
+df = df.dropna().reset_index(drop=True)
+
+# ------------------------------------------------------------
+# 5. FEATURE SETUP
+# ------------------------------------------------------------
+TARGET = "daily_sales"
+
+NUMERIC_FEATURES = [
+    "unit_price",
+    "discount_rate",
+    "promotion_flag",
+    "weekday",
+    "month",
+    "lag_1",
+    "lag_7",
+    "lag_14",
+    "rolling_7",
+    "rolling_14"
+]
+
+CATEGORICAL_FEATURES = [
+    "store_id",
+    "product_id",
+    "weather_condition",
+    "season",
+    "sales_region"
+]
+
+X = df[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
+y = df[TARGET]
+
+# ------------------------------------------------------------
+# 6. PREPROCESSOR
+# ------------------------------------------------------------
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("cat", OneHotEncoder(handle_unknown="ignore", sparse=False), CATEGORICAL_FEATURES),
+        ("num", "passthrough", NUMERIC_FEATURES)
     ]
+)
 
-    X = df[FEATURES]
-    y = df["daily_sales"]
+# ------------------------------------------------------------
+# 7. MODELS
+# ------------------------------------------------------------
+models = {
+    "LinearRegression": LinearRegression(),
+    "RandomForest": RandomForestRegressor(
+        n_estimators=200,
+        max_depth=12,
+        random_state=42,
+        n_jobs=-1
+    ),
+    "GradientBoosting": GradientBoostingRegressor(
+        n_estimators=200,
+        learning_rate=0.05,
+        max_depth=5,
+        random_state=42
+    )
+}
 
-    split = int(len(df) * 0.8)
-    X_train, X_test = X.iloc[:split], X.iloc[split:]
-    y_train, y_test = y.iloc[:split], y.iloc[split:]
+# ------------------------------------------------------------
+# 8. TIME SERIES CROSS VALIDATION
+# ------------------------------------------------------------
+tscv = TimeSeriesSplit(n_splits=5)
+results = []
 
-    models = {
-        "Linear Regression": LinearRegression(),
-        "Random Forest": RandomForestRegressor(
-            n_estimators=300, max_depth=15, random_state=42
-        ),
-        "Gradient Boosting": GradientBoostingRegressor(
-            n_estimators=200, learning_rate=0.05, max_depth=5
+for model_name, model in models.items():
+    mae_scores = []
+    rmse_scores = []
+
+    for train_idx, test_idx in tscv.split(X):
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+        pipe = Pipeline(
+            steps=[
+                ("prep", preprocessor),
+                ("model", model)
+            ]
         )
-    }
 
-    results, preds_store = [], {}
+        pipe.fit(X_train, y_train)
+        preds = pipe.predict(X_test)
 
-    for name, model in models.items():
-        model.fit(X_train, y_train)
-        preds = model.predict(X_test)
+        mae_scores.append(mean_absolute_error(y_test, preds))
+        rmse_scores.append(mean_squared_error(y_test, preds, squared=False))
 
-        results.append({
-            "Model": name,
-            "RMSE": np.sqrt(mean_squared_error(y_test, preds))
-        })
-        preds_store[name] = preds
+    results.append({
+        "model": model_name,
+        "MAE": np.mean(mae_scores),
+        "RMSE": np.mean(rmse_scores)
+    })
 
-    results_df = pd.DataFrame(results).sort_values("RMSE")
-    best_model = results_df.iloc[0]["Model"]
+results_df = pd.DataFrame(results).sort_values("RMSE")
 
+# ------------------------------------------------------------
+# 9. TRAIN BEST MODEL ON FULL DATA
+# ------------------------------------------------------------
+best_model_name = results_df.iloc[0]["model"]
+best_model = models[best_model_name]
+
+final_pipeline = Pipeline(
+    steps=[
+        ("prep", preprocessor),
+        ("model", best_model)
+    ]
+)
+
+final_pipeline.fit(X, y)
+
+# ------------------------------------------------------------
+# 10. CONFIDENCE INTERVALS (BOOTSTRAP)
+# ------------------------------------------------------------
+def bootstrap_ci(model, X, n_boot=100, alpha=0.05):
+    preds = []
+    for _ in range(n_boot):
+        idx = np.random.choice(len(X), len(X), replace=True)
+        preds.append(model.predict(X.iloc[idx]))
+    preds = np.array(preds)
     return (
-        preds_store[best_model],
-        y_test.index,
-        best_model,
-        results_df
+        np.percentile(preds, 100 * alpha / 2, axis=0),
+        np.percentile(preds, 100 * (1 - alpha / 2), axis=0)
     )
 
-# ======================================================================================
-# NLP ANALYTICS ENGINE (DATA-DRIVEN)
-# ======================================================================================
-class DemandNLP:
+lower_ci, upper_ci = bootstrap_ci(final_pipeline, X)
 
-    def __init__(self, df):
-        self.df = df
-        self.kb = self._build_kb()
-        self.vectorizer = TfidfVectorizer()
-        self.matrix = self.vectorizer.fit_transform(self.kb.keys())
-
-    def _build_kb(self):
-        kb = {}
-        g = self.df.groupby("product_id")
-
-        avg = g.forecast_demand.mean()
-        std = g.forecast_demand.std()
-
-        kb["highest demand product"] = f"Product {avg.idxmax()} has the highest average demand ({avg.max():.0f})."
-        kb["unstable demand product"] = f"Product {std.idxmax()} is most volatile ({std.max():.0f})."
-        kb["low risk product"] = f"Product {std.idxmin()} shows stable demand."
-        kb["business recommendation"] = (
-            "High volatility products require higher safety stock and shorter review cycles."
-        )
-
-        return kb
-
-    def answer(self, q):
-        vec = self.vectorizer.transform([q.lower()])
-        sim = cosine_similarity(vec, self.matrix)
-        idx = sim.argmax()
-
-        if sim[0][idx] < 0.3:
-            return "Ask about demand risk, volatility, highest demand, or recommendations."
-
-        return list(self.kb.values())[idx]
-
-# ======================================================================================
-# STREAMLIT PAGE
-# ======================================================================================
-def demand_forecasting_page():
-
-    st.header("📈 Demand Forecasting – MAJOR Intelligence Module")
-
-    df_raw = load_sales_data()
-    profile = data_profile(df_raw)
-
-    with st.expander("📘 Data Dictionary"):
-        st.dataframe(DATA_DICTIONARY, width="stretch")
-
-    with st.expander("🔍 Data Profiling"):
-        for k,v in profile.items():
-            st.write(f"**{k}:** {v}")
-
-    df = feature_engineering(df_raw)
-
-    all_forecasts = []
-    model_summary = []
-
-    for pid, pdf in df.groupby("product_id"):
-
-        preds, idx, model_name, res = train_product_model(pdf)
-
-        temp = pdf.loc[idx].copy()
-        temp["forecast_demand"] = preds
-
-        std = preds.std()
-        temp["lower_bound"] = preds - 1.96 * std
-        temp["upper_bound"] = preds + 1.96 * std
-        temp["risk_level"] = np.where(std > preds.mean()*0.3, "High", "Low")
-
-        all_forecasts.append(temp)
-        model_summary.append((pid, model_name))
-
-    forecast_df = pd.concat(all_forecasts)
-    forecast_df.to_csv(FORECAST_PATH, index=False)
-
-    st.subheader("📊 Executive KPIs")
-    c1,c2,c3 = st.columns(3)
-    c1.metric("Products", forecast_df.product_id.nunique())
-    c2.metric("Avg Demand", int(forecast_df.forecast_demand.mean()))
-    c3.metric("High Risk SKUs", (forecast_df.risk_level=="High").sum())
-
-    st.subheader("📈 Forecast Preview")
-    st.dataframe(forecast_df.head(20), width="stretch")
-
-    st.download_button(
-        "⬇ Download Forecast Output",
-        forecast_df.to_csv(index=False),
-        file_name="forecast_demand.csv"
+# ------------------------------------------------------------
+# 11. FEATURE IMPORTANCE (EXPLAINABILITY)
+# ------------------------------------------------------------
+if hasattr(best_model, "feature_importances_"):
+    feature_names = (
+        final_pipeline.named_steps["prep"]
+        .get_feature_names_out()
     )
 
-    st.divider()
-    st.subheader("🧠 Demand Analytics Assistant")
+    importance_df = pd.DataFrame({
+        "feature": feature_names,
+        "importance": best_model.feature_importances_
+    }).sort_values("importance", ascending=False)
 
-    nlp = DemandNLP(forecast_df)
-    q = st.chat_input("Ask about demand, risk, volatility...")
+# ------------------------------------------------------------
+# 12. FORECAST OUTPUT
+# ------------------------------------------------------------
+df_forecast = df.copy()
+df_forecast["forecast"] = final_pipeline.predict(X)
+df_forecast["lower_ci"] = lower_ci
+df_forecast["upper_ci"] = upper_ci
 
-    if q:
-        with st.chat_message("assistant"):
-            st.write(nlp.answer(q))
+# ------------------------------------------------------------
+# 13. EXECUTIVE KPIs
+# ------------------------------------------------------------
+kpis = {
+    "Total_Stores": df["store_id"].nunique(),
+    "Total_Products": df["product_id"].nunique(),
+    "Avg_Daily_Sales": df["daily_sales"].mean(),
+    "Best_Model": best_model_name,
+    "RMSE": results_df.iloc[0]["RMSE"]
+}
 
-    st.success("✅ MAJOR-Level Demand Forecasting Completed")
+# ------------------------------------------------------------
+# 14. NLP-STYLE ANALYTICS (DATA ONLY)
+# ------------------------------------------------------------
+def ask_question(question: str):
+    q = question.lower()
+
+    if "best store" in q:
+        return df.groupby("store_id")["daily_sales"].mean().idxmax()
+
+    if "best product" in q:
+        return df.groupby("product_id")["daily_sales"].mean().idxmax()
+
+    if "highest demand" in q:
+        return df.sort_values("daily_sales", ascending=False).head(5)
+
+    return "Question not supported."
+
+# ------------------------------------------------------------
+# 15. DOWNLOADABLE OUTPUT
+# ------------------------------------------------------------
+df_forecast.to_csv("demand_forecast_output.csv", index=False)
+results_df.to_csv("model_comparison.csv", index=False)
+
+print("✅ Demand Forecasting Module Completed Successfully")
+print(results_df)
+print("KPIs:", kpis)
