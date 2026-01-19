@@ -1,6 +1,6 @@
 # ======================================================================================
 # OmniFlow-D2D : Demand Forecasting Intelligence Module
-# SKU-Location Level (Store × Product)
+# SKU–Location Level (Store × Product)
 # MSc Data Science – Major Project
 # ======================================================================================
 
@@ -26,7 +26,7 @@ from sklearn.preprocessing import LabelEncoder
 def demand_forecasting_page():
 
     st.title("📊 Demand Forecasting Intelligence")
-    st.caption("OmniFlow-D2D | SKU–Location Level Demand Forecasting")
+    st.caption("OmniFlow-D2D | SKU–Location Level Forecasting")
 
     # ==============================================================================
     # LOAD DATA
@@ -36,7 +36,31 @@ def demand_forecasting_page():
         return pd.read_csv("data/sales.csv")
 
     df = load_data()
+
+    # ==============================================================================
+    # COLUMN STANDARDIZATION (CRITICAL)
+    # ==============================================================================
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.lower()
+        .str.replace(" ", "_")
+    )
+
     df['date'] = pd.to_datetime(df['date'])
+
+    # ==============================================================================
+    # REQUIRED COLUMN CHECK
+    # ==============================================================================
+    required_cols = [
+        'date', 'store_id', 'product_id', 'daily_sales'
+    ]
+
+    missing_cols = [c for c in required_cols if c not in df.columns]
+
+    if missing_cols:
+        st.error(f"Dataset missing required columns: {missing_cols}")
+        st.stop()
 
     # ==============================================================================
     # DATA PROFILING
@@ -46,7 +70,7 @@ def demand_forecasting_page():
     st.dataframe(df.isna().sum())
 
     # ==============================================================================
-    # STORE & PRODUCT SELECTION (CRITICAL FIX)
+    # STORE & PRODUCT SELECTION
     # ==============================================================================
     st.subheader("🏬 SKU–Location Selection")
 
@@ -60,17 +84,20 @@ def demand_forecasting_page():
         sorted(df[df['store_id'] == store_id]['product_id'].unique())
     )
 
-    data = df[
+    # ==============================================================================
+    # LOCK BASE DATA (NEVER MODIFY THIS)
+    # ==============================================================================
+    base_data = df[
         (df['store_id'] == store_id) &
         (df['product_id'] == product_id)
-    ].sort_values("date")
+    ].sort_values("date").copy()
 
-    if len(data) < 30:
+    if len(base_data) < 30:
         st.error("Not enough historical data for this Store–Product combination.")
         return
 
     # ==============================================================================
-    # ENCODE CATEGORICAL FEATURES
+    # ENCODE CATEGORICAL COLUMNS
     # ==============================================================================
     categorical_cols = [
         'sales_region',
@@ -80,13 +107,16 @@ def demand_forecasting_page():
     ]
 
     for col in categorical_cols:
-        le = LabelEncoder()
-        data[col] = le.fit_transform(data[col])
+        if col in base_data.columns:
+            le = LabelEncoder()
+            base_data[col] = le.fit_transform(base_data[col])
 
     # ==============================================================================
-    # FEATURE ENGINEERING
+    # FEATURE ENGINEERING (ON COPY ONLY)
     # ==============================================================================
     st.subheader("⚙️ Feature Engineering")
+
+    data = base_data.copy()
 
     data['lag_1'] = data['daily_sales'].shift(1)
     data['lag_7'] = data['daily_sales'].shift(7)
@@ -99,6 +129,9 @@ def demand_forecasting_page():
 
     st.success("Lag, rolling mean & seasonality features created")
 
+    # ==============================================================================
+    # FEATURE SET
+    # ==============================================================================
     features = [
         'unit_price',
         'discount_rate',
@@ -114,11 +147,13 @@ def demand_forecasting_page():
         'day_of_week'
     ]
 
+    features = [f for f in features if f in data.columns]
+
     X = data[features]
     y = data['daily_sales']
 
     # ==============================================================================
-    # MODEL DEFINITIONS
+    # MODELS
     # ==============================================================================
     models = {
         "Linear Regression": LinearRegression(),
@@ -137,7 +172,9 @@ def demand_forecasting_page():
 
     for name, model in models.items():
         mae = -cross_val_score(
-            model, X, y,
+            model,
+            X,
+            y,
             cv=tscv,
             scoring="neg_mean_absolute_error"
         ).mean()
@@ -176,20 +213,26 @@ def demand_forecasting_page():
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=data['date'], y=data['daily_sales'],
-        name="Actual Demand"
+        x=data['date'],
+        y=data['daily_sales'],
+        name="Actual"
     ))
     fig.add_trace(go.Scatter(
-        x=data['date'], y=data['forecast'],
-        name="Forecasted Demand"
+        x=data['date'],
+        y=data['forecast'],
+        name="Forecast"
     ))
     fig.add_trace(go.Scatter(
-        x=data['date'], y=data['upper_ci'],
-        name="Upper CI", line=dict(dash="dot")
+        x=data['date'],
+        y=data['upper_ci'],
+        name="Upper CI",
+        line=dict(dash="dot")
     ))
     fig.add_trace(go.Scatter(
-        x=data['date'], y=data['lower_ci'],
-        name="Lower CI", line=dict(dash="dot")
+        x=data['date'],
+        y=data['lower_ci'],
+        name="Lower CI",
+        line=dict(dash="dot")
     ))
 
     st.plotly_chart(fig, use_container_width=True)
@@ -236,19 +279,22 @@ def demand_forecasting_page():
 
     if query:
         q = query.lower()
-
         if "highest" in q:
             st.info(f"Highest daily demand: {data['daily_sales'].max()}")
         elif "average" in q:
             st.info(f"Average daily demand: {round(data['daily_sales'].mean(), 2)}")
         elif "trend" in q:
-            trend = "increasing 📈" if data['daily_sales'].iloc[-1] > data['daily_sales'].iloc[0] else "decreasing 📉"
+            trend = (
+                "increasing 📈"
+                if data['daily_sales'].iloc[-1] > data['daily_sales'].iloc[0]
+                else "decreasing 📉"
+            )
             st.info(f"Demand trend is {trend}")
         else:
             st.warning("Question not recognized")
 
     # ==============================================================================
-    # DOWNLOAD FORECAST OUTPUT (STORE + PRODUCT INCLUDED)
+    # FINAL OUTPUT (STORE_ID GUARANTEED)
     # ==============================================================================
     st.subheader("⬇️ Download Demand Forecast")
 
