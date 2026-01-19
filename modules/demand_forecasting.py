@@ -284,9 +284,9 @@ def demand_forecasting_page():
     st.success("✅ Demand Forecasting Completed Successfully")
 
     # SAVE FULL FORECAST FOR DOWNSTREAM MODULES
-    FULL_FORECAST_PATH = os.path.join("data", "forecast_demand.csv")
+FULL_FORECAST_PATH = os.path.join("data", "forecast_demand.csv")
 
-    full_output = data[
+full_output = data[
       [
         "date",
         "store_id",
@@ -298,5 +298,5 @@ def demand_forecasting_page():
       ]
    ]
 
-   full_output.to_csv(FULL_FORECAST_PATH, index=False)
+full_output.to_csv(FULL_FORECAST_PATH, index=False)
 
