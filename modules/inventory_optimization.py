@@ -59,32 +59,17 @@ def inventory_optimization_page():
     forecast_df, inventory_df = load_data()
 
     # ------------------------------------------------------------------------------
-    # DETECT STOCK COLUMN (VERY IMPORTANT)
+    # INVENTORY COLUMN MAPPING (NO ASSUMPTIONS)
     # ------------------------------------------------------------------------------
-    stock_col_candidates = [
-        "current_stock",
-        "stock",
-        "stock_on_hand",
-        "inventory_level",
-        "available_stock",
-        "quantity",
-        "on_hand_qty"
-    ]
+    st.subheader("⚙ Inventory Column Mapping")
 
-    stock_col = None
-    for col in stock_col_candidates:
-        if col in inventory_df.columns:
-            stock_col = col
-            break
+    st.write("Inventory dataset columns:")
+    st.code(inventory_df.columns.tolist())
 
-    if stock_col is None:
-        st.error(
-            "❌ No stock column found in inventory.csv.\n"
-            "Expected one of: " + ", ".join(stock_col_candidates)
-        )
-        st.stop()
-
-    st.info(f"✅ Using stock column: **{stock_col}**")
+    stock_col = st.selectbox(
+        "Select the column that represents CURRENT STOCK",
+        inventory_df.columns
+    )
 
     # ------------------------------------------------------------------------------
     # JOIN DEMAND FORECAST WITH INVENTORY
@@ -96,7 +81,7 @@ def inventory_optimization_page():
         how="left"
     )
 
-    st.subheader("🔗 Joined Demand–Inventory Data (Preview)")
+    st.subheader("🔗 Joined Demand–Inventory Preview")
     st.write("Joined dataset shape:", merged_df.shape)
     st.dataframe(merged_df.head(10), use_container_width=True)
 
@@ -135,9 +120,8 @@ def inventory_optimization_page():
 
     lead_time = st.slider("Lead Time (days)", 1, 15, 5)
 
-    reorder_point = (avg_demand * lead_time) + safety_stock
     current_stock = data[stock_col].iloc[0]
-
+    reorder_point = (avg_demand * lead_time) + safety_stock
     order_quantity = max(0, reorder_point - current_stock)
 
     # ------------------------------------------------------------------------------
@@ -147,7 +131,7 @@ def inventory_optimization_page():
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Current Stock", int(current_stock))
+    c1.metric("Current Stock", round(current_stock, 2))
     c2.metric("Avg Daily Demand", round(avg_demand, 2))
     c3.metric("Safety Stock", round(safety_stock, 2))
     c4.metric("Reorder Point", round(reorder_point, 2))
