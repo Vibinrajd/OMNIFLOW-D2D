@@ -228,11 +228,8 @@ def demand_forecasting_page():
     df_forecast["upper_ci"] = df_forecast["forecast"] + 1.96 * sigma
 
     # ==========================================================
-# SAVE FULL FORECAST FOR DOWNSTREAM MODULES (AUTO PIPELINE)
-# ==========================================================
+    # SAVE FULL FORECAST FOR INVENTORY MODULE (AUTO PIPELINE)
     # ==========================================================
-# SAVE FULL FORECAST FOR INVENTORY MODULE (PIPELINE OUTPUT)
-# ==========================================================
     FULL_FORECAST_PATH = os.path.join("data", "forecast_demand.csv")
 
     full_output = df_forecast[
@@ -248,6 +245,15 @@ def demand_forecasting_page():
     ].copy()
 
     full_output.to_csv(FULL_FORECAST_PATH, index=False)
+
+    # ================= VISUAL CONFIRMATION ====================
+    st.success("✅ Full demand forecast saved for Inventory module")
+
+    st.info(f"📁 File location: {FULL_FORECAST_PATH}")
+
+    st.subheader("📊 Full Forecast Preview (used by Inventory module)")
+    st.dataframe(full_output.head(10), use_container_width=True)
+
 
 
     
