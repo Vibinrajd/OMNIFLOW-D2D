@@ -230,9 +230,12 @@ def demand_forecasting_page():
     # ==========================================================
 # SAVE FULL FORECAST FOR DOWNSTREAM MODULES (AUTO PIPELINE)
 # ==========================================================
+    # ==========================================================
+# SAVE FULL FORECAST FOR INVENTORY MODULE (PIPELINE OUTPUT)
+# ==========================================================
     FULL_FORECAST_PATH = os.path.join("data", "forecast_demand.csv")
 
-    full_output = data[
+    full_output = df_forecast[
      [
         "date",
         "store_id",
@@ -245,6 +248,7 @@ def demand_forecasting_page():
     ].copy()
 
     full_output.to_csv(FULL_FORECAST_PATH, index=False)
+
 
     
     # -------------------------------
