@@ -224,19 +224,25 @@ def demand_forecasting_page():
     with tab1:
 
         # ---------------- ABSTRACT ----------------
-        
-        st.markdown('<div class="section-title">Abstract</div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="card">
-        OmniFlow D2D is an AI-driven end-to-end enterprise platform that integrates marketing demand forecasting,
-        supply chain planning, manufacturing optimization, transportation logistics, and Gen-AI decision intelligence
-        into a single system.<br><br>
-
-        It removes operational silos by ensuring that demand signals directly drive procurement, production schedules,
-        and delivery planning. The platform functions as a closed-loop intelligence engine that predicts demand,
-        optimizes execution, and continuously improves decisions using real-time data and AI.
+            <div class="section-title" style="margin-top:0;">Abstract</div>
+        
+            <p style="line-height:1.7;">
+                OmniFlow D2D is an AI-driven end-to-end enterprise platform that integrates
+                marketing demand forecasting, supply chain planning, manufacturing optimization,
+                transportation logistics, and Gen-AI decision intelligence into a single system.
+            </p>
+        
+            <p style="line-height:1.7; margin-bottom:0;">
+                It removes operational silos by ensuring that demand signals directly drive
+                procurement, production schedules, and delivery planning. The platform functions
+                as a closed-loop intelligence engine that predicts demand, optimizes execution,
+                and continuously improves decisions using real-time data and AI.
+            </p>
         </div>
         """, unsafe_allow_html=True)
+
 
         # ---------------- TOOLS ----------------
         st.markdown('<div class="section-title">🛠 Tools</div>', unsafe_allow_html=True)
