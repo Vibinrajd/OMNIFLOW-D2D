@@ -29,7 +29,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📦 OmniFlow D2D")
+st.title("OmniFlow D2D")
 st.subheader("AI-Powered Demand-to-Delivery Optimization System")
 
 # --------------------------------------------------
@@ -49,7 +49,6 @@ menu = st.sidebar.radio(
 # PAGE ROUTING
 # --------------------------------------------------
 if menu == "Demand Intelligence":
-    st.header("📦 Demand Intelligence")
     demand_forecasting_page()
 
 elif menu == "Inventory Optimization":
