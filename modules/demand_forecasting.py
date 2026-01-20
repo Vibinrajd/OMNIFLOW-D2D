@@ -101,8 +101,6 @@ def nlp_answer(df, query):
 
 def demand_forecasting_page():
 
-    st.title("Demand Forecasting")
-
     tab1, tab2 = st.tabs(["Overview", "Application"])
 
     # ==================================================================================
@@ -315,9 +313,6 @@ def demand_forecasting_page():
 
         full_output.to_csv(FULL_FORECAST_PATH, index=False)
 
-        st.success("Full demand forecast saved for Inventory module")
-        st.info(f"📁 File location: {FULL_FORECAST_PATH}")
-
         st.subheader("Full Forecast Preview (used by Inventory module)")
         st.dataframe(full_output.head(10), use_container_width=True)
 
@@ -346,7 +341,7 @@ def demand_forecasting_page():
         # -------------------------------
         # FORECAST VISUALIZATION
         # -------------------------------
-        st.subheader("📈 Forecast with Confidence Interval")
+        st.subheader("Forecast with Confidence Interval")
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["forecast"], name="Forecast"))
@@ -375,4 +370,3 @@ def demand_forecasting_page():
             "forecast_demand.csv"
         )
 
-        st.success("✅ Demand Forecasting Completed Successfully")
