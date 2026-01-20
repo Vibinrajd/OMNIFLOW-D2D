@@ -11,28 +11,6 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import LabelEncoder
 
-DATA_DICTIONARY = pd.DataFrame({
-    "Column": [
-        "date", "store_id", "product_id", "product_category", "sales_region",
-        "daily_sales", "unit_price", "discount_rate", "promotion_flag",
-        "weather_condition", "competitor_price", "season"
-    ],
-    "Description": [
-        "Date of sales transaction",
-        "Unique store identifier",
-        "Unique product (SKU) identifier",
-        "Product category",
-        "Sales region",
-        "Units sold per day (TARGET)",
-        "Selling price per unit",
-        "Discount percentage",
-        "Promotion indicator (0/1)",
-        "Weather condition",
-        "Competitor product price",
-        "Season label"
-    ]
-})
-
 
 # ======================================================================================
 # PATH CONFIG
@@ -104,7 +82,7 @@ def demand_forecasting_page():
 
     st.title("Demand Forecasting")
 
-    tab1, tab2, tab3 = st.tabs(["Overview", "Important Attributes", "Application"])
+    tab1, tab2 = st.tabs(["Overview", "Application"])
 
     # ==================================================================================
     # TAB 1 : OVERVIEW
@@ -139,7 +117,7 @@ def demand_forecasting_page():
         - Matplotlib / Plotly  
         """)
 
-        st.markdown("### 🚀 What Can Be Done")
+        st.markdown("### What Can Be Done")
 
         col1, col2 = st.columns(2)
 
@@ -200,58 +178,23 @@ def demand_forecasting_page():
         - Pharmaceuticals  
         """)
 
+    
     # ==================================================================================
-    # TAB 2 : IMPORTANT ATTRIBUTES
+    # TAB 2 : APPLICATION 
     # ==================================================================================
     with tab2:
 
-        st.subheader("📘 Required Column Data Dictionary")
-        st.dataframe(DATA_DICTIONARY, use_container_width=True)
-
-        st.subheader("🔀 Variable Classification")
-
-        left, right = st.columns(2)
-
-        with left:
-            st.markdown("""
-            **Independent Variables**
-            - unit_price  
-            - discount_rate  
-            - promotion_flag  
-            - competitor_price  
-            - product_category  
-            - sales_region  
-            - weather_condition  
-            - season  
-            - lag_1  
-            - lag_7  
-            - rolling_7  
-            - month  
-            - day_of_week  
-            """)
-
-        with right:
-            st.markdown("""
-            **Dependent Variable**
-            - daily_sales
-            """)
-
-    # ==================================================================================
-    # TAB 3 : APPLICATION (100% ORIGINAL CODE – NOTHING REMOVED)
-    # ==================================================================================
-    with tab3:
-
-        st.header("📈 Demand Forecasting – Intelligence Module")
+        st.header("Demand Forecasting – Intelligence Module")
 
         # -------------------------------
         # LOAD DATA
         # -------------------------------
         df = load_data()
 
-        with st.expander("📘 Data Dictionary"):
+        with st.expander("Data Dictionary"):
             st.dataframe(DATA_DICTIONARY, use_container_width=True)
 
-        with st.expander("🔍 Data Profiling"):
+        with st.expander("Data Profiling"):
             profile = data_profiling(df)
             for k, v in profile.items():
                 st.write(f"**{k}:** {v}")
@@ -351,16 +294,16 @@ def demand_forecasting_page():
 
         full_output.to_csv(FULL_FORECAST_PATH, index=False)
 
-        st.success("✅ Full demand forecast saved for Inventory module")
+        st.success("Full demand forecast saved for Inventory module")
         st.info(f"📁 File location: {FULL_FORECAST_PATH}")
 
-        st.subheader("📊 Full Forecast Preview (used by Inventory module)")
+        st.subheader("Full Forecast Preview (used by Inventory module)")
         st.dataframe(full_output.head(10), use_container_width=True)
 
         # -------------------------------
         # KPIs
         # -------------------------------
-        st.subheader("📊 Executive KPIs")
+        st.subheader("Executive KPIs")
         c1, c2, c3, c4 = st.columns(4)
 
         c1.metric("Best Model", best_model)
