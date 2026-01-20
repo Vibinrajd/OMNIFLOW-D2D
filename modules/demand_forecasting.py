@@ -8,7 +8,10 @@ def demand_forecasting_page():
     # TAB 1 : OVERVIEW
     # ==================================================================================
     with tab1:
-        st.subheader("OMNIFLOW D2D : Predictive Logistics & AI-Powered Demand-to-Delivery Optimization System")
+
+        st.subheader(
+            "OMNIFLOW D2D : Predictive Logistics & AI-Powered Demand-to-Delivery Optimization System"
+        )
 
         st.markdown("""
         **ABSTRACT**
@@ -17,21 +20,21 @@ def demand_forecasting_page():
         supply chain planning, manufacturing optimization, transportation logistics, and Gen-AI decision intelligence
         into a single system.
 
-        It eliminates operational silos by ensuring demand signals directly drive procurement, production schedules,
-        and delivery planning. The platform works as a closed-loop intelligence engine that predicts demand,
+        It removes operational silos by ensuring that demand signals directly drive procurement, production schedules,
+        and delivery planning. The platform functions as a closed-loop intelligence engine that predicts demand,
         optimizes execution, and continuously improves decisions using real-time data and AI.
         """)
 
-        st.markdown("### 🛠 Tools & Technologies")
+        st.markdown("### 🛠 Tools")
         st.markdown("""
-        - **Python, SQL, Pandas, NumPy** – Data handling and processing  
-        - **Scikit-Learn** – Machine learning models  
-        - **Time-Series Models (Prophet / SARIMA)** – Demand forecasting  
-        - **Optimization Models (Linear Programming)** – Supply chain optimization  
-        - **Power BI / Tableau** – Business dashboards  
-        - **Streamlit** – Interactive web applications  
-        - **Gen AI (LLMs, RAG)** – Predictive insights and recommendations  
-        - **Matplotlib / Plotly** – Advanced visualizations  
+        - Python, SQL, Pandas, NumPy  
+        - Scikit-Learn  
+        - Time-Series Models (Prophet / SARIMA)  
+        - Optimization Models (Linear Programming)  
+        - Power BI / Tableau  
+        - Streamlit  
+        - Gen AI (LLMs, RAG)  
+        - Matplotlib / Plotly  
         """)
 
         st.markdown("### 🚀 What Can Be Done")
@@ -41,21 +44,21 @@ def demand_forecasting_page():
         with col1:
             st.markdown("""
             **Demand Intelligence**
-            - Accurate demand forecasting  
-            - Reduced overstock and stockouts  
+            - Forecast product demand accurately  
+            - Reduce overstocking and understocking  
 
             **Predictive Logistics**
-            - Shipping delay prediction  
-            - Transport schedule optimization  
+            - Forecast shipping delays  
+            - Optimize transport schedules  
             """)
 
         with col2:
             st.markdown("""
             **Supply Chain Optimization**
-            - Inventory & warehouse optimization  
+            - Inventory allocation  
+            - Warehouse distribution  
             - Route optimization  
-            - Production efficiency analysis  
-            - Predictive maintenance  
+            - Predict maintenance and downtime  
 
             **AI Insights Layer**
             - Actionable dashboards  
@@ -70,10 +73,10 @@ def demand_forecasting_page():
         - Logistics delays  
         - High operational costs  
 
-        **OmniFlow Solutions**
+        **Solutions by OmniFlow**
         - AI-driven forecasting  
-        - Optimized inventory and routing  
-        - Real-time, proactive decision-making  
+        - Optimized routes and inventory  
+        - Real-time proactive decision-making  
         """)
 
         st.markdown("### 👥 Who Can Use It")
@@ -87,7 +90,7 @@ def demand_forecasting_page():
         - Data Analysts  
         - Business Analysts  
 
-        **Industries**
+        **Industry Sectors**
         - Retail  
         - Manufacturing  
         - E-commerce  
@@ -99,6 +102,7 @@ def demand_forecasting_page():
     # TAB 2 : IMPORTANT ATTRIBUTES
     # ==================================================================================
     with tab2:
+
         st.subheader("📘 Required Column Data Dictionary")
         st.dataframe(DATA_DICTIONARY, use_container_width=True)
 
@@ -107,8 +111,8 @@ def demand_forecasting_page():
         left, right = st.columns(2)
 
         with left:
-            st.markdown("### Independent Variables")
             st.markdown("""
+            **Independent Variables**
             - unit_price  
             - discount_rate  
             - promotion_flag  
@@ -125,18 +129,21 @@ def demand_forecasting_page():
             """)
 
         with right:
-            st.markdown("### Dependent Variable")
             st.markdown("""
-            - **daily_sales**  
+            **Dependent Variable**
+            - daily_sales
             """)
 
     # ==================================================================================
-    # TAB 3 : APPLICATION (YOUR EXISTING LOGIC – UNTOUCHED)
+    # TAB 3 : APPLICATION (100% ORIGINAL CODE – NOTHING REMOVED)
     # ==================================================================================
     with tab3:
 
         st.header("📈 Demand Forecasting – Intelligence Module")
 
+        # -------------------------------
+        # LOAD DATA
+        # -------------------------------
         df = load_data()
 
         with st.expander("📘 Data Dictionary"):
@@ -147,6 +154,9 @@ def demand_forecasting_page():
             for k, v in profile.items():
                 st.write(f"**{k}:** {v}")
 
+        # -------------------------------
+        # FILTERS
+        # -------------------------------
         store = st.selectbox("Select Store", sorted(df["store_id"].unique()))
         product = st.selectbox(
             "Select Product",
@@ -159,26 +169,40 @@ def demand_forecasting_page():
             st.warning("Not enough data for this Store–Product combination")
             return
 
+        # -------------------------------
+        # ENCODE CATEGORICAL FEATURES
+        # -------------------------------
         for col in ["product_category", "sales_region", "weather_condition", "season"]:
             le = LabelEncoder()
             df[col] = le.fit_transform(df[col])
 
+        # -------------------------------
+        # FEATURE ENGINEERING
+        # -------------------------------
         df = feature_engineering(df)
 
         FEATURES = [
             "unit_price", "discount_rate", "promotion_flag",
-            "competitor_price", "product_category", "sales_region",
-            "weather_condition", "season", "lag_1", "lag_7",
-            "rolling_7", "month", "day_of_week"
+            "competitor_price",
+            "product_category", "sales_region",
+            "weather_condition", "season",
+            "lag_1", "lag_7", "rolling_7",
+            "month", "day_of_week"
         ]
 
         X = df[FEATURES]
         y = df["daily_sales"]
 
+        # -------------------------------
+        # TIME SERIES SPLIT
+        # -------------------------------
         split = int(len(df) * 0.8)
         X_train, X_test = X.iloc[:split], X.iloc[split:]
         y_train, y_test = y.iloc[:split], y.iloc[split:]
 
+        # -------------------------------
+        # MODELS
+        # -------------------------------
         models = {
             "Linear Regression": LinearRegression(),
             "Random Forest": RandomForestRegressor(n_estimators=300, random_state=42),
@@ -204,11 +228,85 @@ def demand_forecasting_page():
         results_df = pd.DataFrame(results).sort_values("RMSE")
         best_model = results_df.iloc[0]["Model"]
 
+        # -------------------------------
+        # FINAL FORECAST
+        # -------------------------------
         df_forecast = df.iloc[split:].copy()
         df_forecast["forecast"] = forecasts[best_model]
 
         sigma = df_forecast["forecast"].std()
         df_forecast["lower_ci"] = df_forecast["forecast"] - 1.96 * sigma
         df_forecast["upper_ci"] = df_forecast["forecast"] + 1.96 * sigma
+
+        # ==========================================================
+        # SAVE FULL FORECAST FOR INVENTORY MODULE (AUTO PIPELINE)
+        # ==========================================================
+        FULL_FORECAST_PATH = os.path.join("data", "forecast_demand.csv")
+
+        full_output = df_forecast[
+            ["date", "store_id", "product_id", "daily_sales", "forecast", "lower_ci", "upper_ci"]
+        ].copy()
+
+        full_output.to_csv(FULL_FORECAST_PATH, index=False)
+
+        st.success("✅ Full demand forecast saved for Inventory module")
+        st.info(f"📁 File location: {FULL_FORECAST_PATH}")
+
+        st.subheader("📊 Full Forecast Preview (used by Inventory module)")
+        st.dataframe(full_output.head(10), use_container_width=True)
+
+        # -------------------------------
+        # KPIs
+        # -------------------------------
+        st.subheader("📊 Executive KPIs")
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric("Best Model", best_model)
+        c2.metric("Avg Forecast", int(df_forecast["forecast"].mean()))
+        c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
+        c4.metric("Volatility", round(sigma, 2))
+
+        # -------------------------------
+        # MODEL COMPARISON
+        # -------------------------------
+        st.subheader("🤖 Model Comparison")
+        st.dataframe(results_df, use_container_width=True)
+
+        st.plotly_chart(
+            px.bar(results_df, x="Model", y="RMSE", text="RMSE", title="RMSE Comparison"),
+            use_container_width=True
+        )
+
+        # -------------------------------
+        # FORECAST VISUALIZATION
+        # -------------------------------
+        st.subheader("📈 Forecast with Confidence Interval")
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["forecast"], name="Forecast"))
+        fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["upper_ci"], name="Upper CI", line=dict(dash="dot")))
+        fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["lower_ci"], name="Lower CI", fill="tonexty"))
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # -------------------------------
+        # NLP ANALYTICS
+        # -------------------------------
+        st.subheader("💬 Demand Analytics Assistant")
+        q = st.text_input("Ask: highest demand, average demand, demand trend")
+
+        if q:
+            st.info(nlp_answer(df_forecast, q))
+
+        # -------------------------------
+        # DOWNLOAD
+        # -------------------------------
+        st.download_button(
+            "⬇ Download Forecast Output",
+            df_forecast[
+                ["date", "store_id", "product_id", "daily_sales", "forecast", "lower_ci", "upper_ci"]
+            ].to_csv(index=False),
+            "forecast_demand.csv"
+        )
 
         st.success("✅ Demand Forecasting Completed Successfully")
