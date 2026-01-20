@@ -11,6 +11,27 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import LabelEncoder
 
+DATA_DICTIONARY = pd.DataFrame({
+    "Column": [
+        "date", "store_id", "product_id", "product_category", "sales_region",
+        "daily_sales", "unit_price", "discount_rate", "promotion_flag",
+        "weather_condition", "competitor_price", "season"
+    ],
+    "Description": [
+        "Date of sales transaction",
+        "Unique store identifier",
+        "Unique product (SKU) identifier",
+        "Product category",
+        "Sales region",
+        "Units sold per day (TARGET)",
+        "Selling price per unit",
+        "Discount percentage",
+        "Promotion indicator (0/1)",
+        "Weather condition",
+        "Competitor product price",
+        "Season label"
+    ]
+})
 
 # ======================================================================================
 # PATH CONFIG
