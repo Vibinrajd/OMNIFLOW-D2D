@@ -12,129 +12,120 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import LabelEncoder
 
 warnings.filterwarnings("ignore")
+st.set_page_config(layout="wide", page_title="OmniFlow D2D")
 
 # ======================================================================================
-# GLOBAL CSS (UI POLISH)
+# GLOBAL CSS
 # ======================================================================================
 st.markdown("""
 <style>
 
-/* ---------------- GLOBAL ---------------- */
+/* ---------- GLOBAL ---------- */
 html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
 }
 
-section.main > div {
-    padding-top: 1rem;
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0f172a, #020617);
 }
 
-/* ---------------- HEADERS ---------------- */
-h1, h2, h3 {
-    letter-spacing: 0.4px;
+.block-container {
+    padding-top: 2rem;
 }
 
-/* ---------------- KPI METRICS ---------------- */
-[data-testid="metric-container"] {
-    background: #0e1117;
-    border-radius: 14px;
-    padding: 18px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* ---------- TABS ---------- */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 10px;
 }
 
-[data-testid="metric-container"]:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 14px 30px rgba(0,0,0,0.55);
-}
-
-[data-testid="metric-label"] {
-    font-size: 14px;
-    opacity: 0.75;
-}
-
-[data-testid="metric-value"] {
-    font-size: 28px;
-    font-weight: 600;
-}
-
-/* ---------------- BUTTONS ---------------- */
-.stDownloadButton button,
-.stButton button {
-    background: linear-gradient(135deg, #4f46e5, #6366f1);
-    color: white;
+.stTabs [data-baseweb="tab"] {
+    background: #020617;
     border-radius: 10px;
-    padding: 0.6rem 1.2rem;
+    padding: 10px 18px;
+    color: #94a3b8;
     font-weight: 500;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 14px rgba(79,70,229,0.4);
+    transition: all 0.25s ease;
 }
 
-.stDownloadButton button:hover,
-.stButton button:hover {
-    transform: scale(1.03);
-    box-shadow: 0 8px 24px rgba(79,70,229,0.65);
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    color: white;
+    box-shadow: 0 8px 25px rgba(37,99,235,0.4);
 }
 
-/* ---------------- SELECTBOX ---------------- */
-.stSelectbox > div > div {
-    border-radius: 10px;
+/* ---------- KPI CARDS ---------- */
+.kpi-card {
+    background: linear-gradient(145deg, #020617, #020617);
+    border-radius: 18px;
+    padding: 22px;
+    text-align: center;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.45);
+    transition: all 0.3s ease;
 }
 
-/* ---------------- EXPANDERS ---------------- */
-details {
-    background: #0e1117;
+.kpi-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 25px 45px rgba(37,99,235,0.35);
+}
+
+.kpi-title {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+.kpi-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #e5e7eb;
+}
+
+/* ---------- BUTTONS ---------- */
+.stDownloadButton button, .stButton button {
+    background: linear-gradient(135deg, #2563eb, #1e3a8a);
     border-radius: 12px;
-    padding: 10px;
-    margin-bottom: 10px;
+    padding: 10px 22px;
+    font-weight: 600;
+    border: none;
+    box-shadow: 0 10px 25px rgba(37,99,235,0.4);
+    transition: all 0.25s ease;
 }
 
-details[open] {
-    box-shadow: 0 10px 26px rgba(0,0,0,0.45);
+.stDownloadButton button:hover, .stButton button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 20px 40px rgba(37,99,235,0.6);
 }
 
-/* ---------------- DATAFRAMES ---------------- */
+/* ---------- DATAFRAME ---------- */
 [data-testid="stDataFrame"] {
     border-radius: 14px;
-    overflow: hidden;
-    box-shadow: 0 10px 26px rgba(0,0,0,0.4);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
 }
 
-/* ---------------- TABS ---------------- */
-button[data-baseweb="tab"] {
-    font-size: 15px;
-    padding: 10px 18px;
-}
-
-button[data-baseweb="tab"]:hover {
-    background-color: rgba(99,102,241,0.18);
-    border-radius: 10px;
-}
-
-/* ---------------- TOOLTIP ---------------- */
+/* ---------- POPUP TOOLTIP ---------- */
 .tooltip {
     position: relative;
     cursor: pointer;
 }
 
-.tooltip::after {
-    content: attr(data-tooltip);
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 220px;
+    background-color: #020617;
+    color: #e5e7eb;
+    text-align: center;
+    padding: 10px;
+    border-radius: 10px;
     position: absolute;
+    z-index: 1;
     bottom: 130%;
     left: 50%;
     transform: translateX(-50%);
-    background: #111827;
-    color: #fff;
-    padding: 6px 10px;
-    border-radius: 8px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
 }
 
-.tooltip:hover::after {
-    opacity: 1;
+.tooltip:hover .tooltiptext {
+    visibility: visible;
 }
 
 </style>
@@ -201,14 +192,11 @@ def data_profiling(df):
 # ======================================================================================
 def feature_engineering(df):
     df = df.sort_values("date")
-
     df["lag_1"] = df["daily_sales"].shift(1)
     df["lag_7"] = df["daily_sales"].shift(7)
     df["rolling_7"] = df["daily_sales"].rolling(7).mean()
-
     df["month"] = df["date"].dt.month
     df["day_of_week"] = df["date"].dt.dayofweek
-
     df.dropna(inplace=True)
     return df
 
@@ -217,50 +205,144 @@ def feature_engineering(df):
 # ======================================================================================
 def nlp_answer(df, query):
     q = query.lower()
-
     if "highest" in q:
-        return f"Highest daily demand forecast: {df['forecast'].max():.0f} units"
+        return f"Highest forecasted demand: {df['forecast'].max():.0f} units"
     if "average" in q:
-        return f"Average daily demand forecast: {df['forecast'].mean():.2f} units"
+        return f"Average forecasted demand: {df['forecast'].mean():.2f} units"
     if "trend" in q:
-        return (
-            "Demand trend is increasing 📈"
-            if df["forecast"].iloc[-1] > df["forecast"].iloc[0]
-            else "Demand trend is decreasing 📉"
-        )
+        return "Demand trend is increasing 📈" if df["forecast"].iloc[-1] > df["forecast"].iloc[0] else "Demand trend is decreasing 📉"
     return "Try: highest demand, average demand, demand trend"
 
 # ======================================================================================
 # MAIN PAGE
-# ======================================================================================
 def demand_forecasting_page():
 
     tab1, tab2 = st.tabs(["Overview", "Application"])
 
-    # ---------------- OVERVIEW ----------------
+    # ==================================================================================
+    # TAB 1 : OVERVIEW (FULLY RESTORED)
+    # ==================================================================================
     with tab1:
-        st.subheader("OMNIFLOW D2D : Predictive Logistics & AI-Powered Demand-to-Delivery Optimization System")
 
         st.markdown("""
-        OmniFlow D2D is an AI-driven enterprise platform integrating demand forecasting,
-        supply chain planning, logistics optimization, and Gen-AI intelligence into a
-        single closed-loop decision system.
+        <div style="background:#020617;padding:28px;border-radius:18px;
+                    box-shadow:0 20px 40px rgba(0,0,0,0.45)">
+        """, unsafe_allow_html=True)
+
+        st.subheader(
+            "OMNIFLOW D2D : Predictive Logistics & AI-Powered Demand-to-Delivery Optimization System"
+        )
+
+        st.markdown("""
+        **ABSTRACT**
+
+        OmniFlow D2D is an AI-driven end-to-end enterprise platform that integrates marketing demand forecasting,
+        supply chain planning, manufacturing optimization, transportation logistics, and Gen-AI decision intelligence
+        into a single system.
+
+        It removes operational silos by ensuring that demand signals directly drive procurement, production schedules,
+        and delivery planning. The platform functions as a closed-loop intelligence engine that predicts demand,
+        optimizes execution, and continuously improves decisions using real-time data and AI.
         """)
 
-    # ---------------- APPLICATION ----------------
+        st.markdown("### 🛠 Tools")
+        st.markdown("""
+        - Python, SQL, Pandas, NumPy  
+        - Scikit-Learn  
+        - Time-Series Models (Prophet / SARIMA)  
+        - Optimization Models (Linear Programming)  
+        - Power BI / Tableau  
+        - Streamlit  
+        - Gen AI (LLMs, RAG)  
+        - Matplotlib / Plotly  
+        """)
+
+        st.markdown("### What Can Be Done")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("""
+            **Demand Intelligence**
+            - Forecast product demand accurately  
+            - Reduce overstocking and understocking  
+
+            **Predictive Logistics**
+            - Forecast shipping delays  
+            - Optimize transport schedules  
+            """)
+
+        with col2:
+            st.markdown("""
+            **Supply Chain Optimization**
+            - Inventory allocation  
+            - Warehouse distribution  
+            - Route optimization  
+            - Predict maintenance and downtime  
+
+            **AI Insights Layer**
+            - Actionable dashboards  
+            - AI-based decision support  
+            """)
+
+        st.markdown("### ❓ Why It Is Needed")
+
+        st.markdown("""
+        **Challenges**
+        - Inventory wastage and stockouts  
+        - Logistics delays  
+        - High operational costs  
+
+        **Solutions by OmniFlow**
+        - AI-driven forecasting  
+        - Optimized routes and inventory  
+        - Real-time proactive decision-making  
+        """)
+
+        st.markdown("### 👥 Who Can Use It")
+
+        st.markdown("""
+        **Enterprise Roles**
+        - Supply Chain Managers  
+        - Production Planners  
+        - Logistics Coordinators  
+        - Data Scientists  
+        - Data Analysts  
+        - Business Analysts  
+
+        **Industry Sectors**
+        - Retail  
+        - Manufacturing  
+        - E-commerce  
+        - FMCG  
+        - Pharmaceuticals  
+        """)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ==================================================================================
+    # TAB 2 : APPLICATION (UNCHANGED LOGIC, STYLED OUTPUT)
+    # ==================================================================================
     with tab2:
+
         st.header("Demand Forecasting – Intelligence Module")
 
+        # -------------------------------
+        # LOAD DATA
+        # -------------------------------
         df = load_data()
 
-        with st.expander("Data Dictionary"):
+        with st.expander("📘 Data Dictionary"):
             st.dataframe(DATA_DICTIONARY, use_container_width=True)
 
-        with st.expander("Data Profiling"):
+        with st.expander("📊 Data Profiling"):
             profile = data_profiling(df)
             for k, v in profile.items():
                 st.write(f"**{k}:** {v}")
 
+        # -------------------------------
+        # FILTERS
+        # -------------------------------
         store = st.selectbox("Select Store", sorted(df["store_id"].unique()))
         product = st.selectbox(
             "Select Product",
@@ -273,18 +355,28 @@ def demand_forecasting_page():
             st.warning("Not enough data for this Store–Product combination")
             return
 
+        # -------------------------------
+        # ENCODING
+        # -------------------------------
         for col in ["product_category", "sales_region", "weather_condition", "season"]:
             df[col] = LabelEncoder().fit_transform(df[col])
 
+        # -------------------------------
+        # FEATURE ENGINEERING
+        # -------------------------------
         df = feature_engineering(df)
 
         FEATURES = [
-            "unit_price", "discount_rate", "promotion_flag", "competitor_price",
-            "product_category", "sales_region", "weather_condition", "season",
-            "lag_1", "lag_7", "rolling_7", "month", "day_of_week"
+            "unit_price", "discount_rate", "promotion_flag",
+            "competitor_price",
+            "product_category", "sales_region",
+            "weather_condition", "season",
+            "lag_1", "lag_7", "rolling_7",
+            "month", "day_of_week"
         ]
 
-        X, y = df[FEATURES], df["daily_sales"]
+        X = df[FEATURES]
+        y = df["daily_sales"]
 
         split = int(len(df) * 0.8)
         X_train, X_test = X.iloc[:split], X.iloc[split:]
@@ -320,28 +412,59 @@ def demand_forecasting_page():
         df_forecast["lower_ci"] = df_forecast["forecast"] - 1.96 * sigma
         df_forecast["upper_ci"] = df_forecast["forecast"] + 1.96 * sigma
 
+        # -------------------------------
+        # KPIs (STYLED)
+        # -------------------------------
         st.subheader("Executive KPIs")
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Best Model", best_model)
-        c2.metric("Avg Forecast", int(df_forecast["forecast"].mean()))
-        c3.metric("RMSE", round(results_df.iloc[0]["RMSE"], 2))
-        c4.metric("Volatility", round(sigma, 2))
 
-        st.subheader("Forecast with Confidence Interval")
+        kpis = [
+            ("Best Model", best_model),
+            ("Avg Forecast", int(df_forecast["forecast"].mean())),
+            ("RMSE", round(results_df.iloc[0]["RMSE"], 2)),
+            ("Volatility", round(sigma, 2))
+        ]
+
+        for col, (title, value) in zip([c1, c2, c3, c4], kpis):
+            with col:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{title}</div>
+                    <div class="kpi-value">{value}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # -------------------------------
+        # VISUALS
+        # -------------------------------
+        st.plotly_chart(
+            px.bar(results_df, x="Model", y="RMSE", text="RMSE", title="Model Comparison"),
+            use_container_width=True
+        )
+
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["forecast"], name="Forecast"))
         fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["upper_ci"], name="Upper CI", line=dict(dash="dot")))
-        fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["lower_ci"], fill="tonexty", name="Lower CI"))
-
-        fig.update_layout(
-            template="plotly_dark",
-            hovermode="x unified",
-            margin=dict(l=20, r=20, t=40, b=20)
-        )
-
+        fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["lower_ci"], name="Lower CI", fill="tonexty"))
         st.plotly_chart(fig, use_container_width=True)
 
+        # -------------------------------
+        # NLP
+        # -------------------------------
         st.subheader("💬 Demand Analytics Assistant")
         q = st.text_input("Ask: highest demand, average demand, demand trend")
         if q:
             st.info(nlp_answer(df_forecast, q))
+
+        # -------------------------------
+        # DOWNLOAD
+        # -------------------------------
+        st.download_button(
+            "⬇ Download Forecast Output",
+            df_forecast[
+                ["date", "store_id", "product_id", "daily_sales", "forecast", "lower_ci", "upper_ci"]
+            ].to_csv(index=False),
+            "forecast_demand.csv"
+        )
+
+
