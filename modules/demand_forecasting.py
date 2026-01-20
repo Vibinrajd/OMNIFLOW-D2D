@@ -223,16 +223,9 @@ def demand_forecasting_page():
     # ==================================================================================
     with tab1:
 
-        st.markdown("""
-        <div class="page-title">
-        OMNIFLOW D2D
-        </div>
-        <div class="page-subtitle">
-        Predictive Logistics & AI-Powered Demand-to-Delivery Optimization System
-        </div>
-        """, unsafe_allow_html=True)
-
         # ---------------- ABSTRACT ----------------
+        
+        st.markdown('<div class="section-title">Abstract</div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="card">
         <b>ABSTRACT</b><br><br>
@@ -250,86 +243,107 @@ def demand_forecasting_page():
         st.markdown('<div class="section-title">🛠 Tools</div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="card">
-        Python, SQL, Pandas, NumPy<br>
-        Scikit-Learn<br>
-        Time-Series Models (Prophet / SARIMA)<br>
-        Optimization Models (Linear Programming)<br>
-        Power BI / Tableau<br>
-        Streamlit<br>
-        Gen AI (LLMs, RAG)<br>
-        Matplotlib / Plotly
+        <ul style="line-height:1.8; padding-left:20px;">
+            <li>Python, SQL, Pandas, NumPy</li>
+            <li>Scikit-Learn</li>
+            <li>Time-Series Models (Prophet / SARIMA)</li>
+            <li>Optimization Models (Linear Programming)</li>
+            <li>Power BI / Tableau</li>
+            <li>Streamlit</li>
+            <li>Gen AI (LLMs, RAG)</li>
+            <li>Matplotlib / Plotly</li>
+        </ul>
         </div>
         """, unsafe_allow_html=True)
 
+
         # ---------------- WHAT CAN BE DONE ----------------
         st.markdown('<div class="section-title">What Can Be Done</div>', unsafe_allow_html=True)
-
         col1, col2 = st.columns(2)
-
+        
         with col1:
             st.markdown("""
             <div class="card">
-            <b>Demand Intelligence</b><br>
-            Forecast product demand accurately<br>
-            Reduce overstocking and understocking<br><br>
-
-            <b>Predictive Logistics</b><br>
-            Forecast shipping delays<br>
-            Optimize transport schedules
+            <b>Demand Intelligence</b>
+            <ul>
+                <li>Forecast product demand accurately</li>
+                <li>Reduce overstocking and understocking</li>
+            </ul>
+        
+            <b>Predictive Logistics</b>
+            <ul>
+                <li>Forecast shipping delays</li>
+                <li>Optimize transport schedules</li>
+            </ul>
             </div>
             """, unsafe_allow_html=True)
-
+        
         with col2:
             st.markdown("""
             <div class="card">
-            <b>Supply Chain Optimization</b><br>
-            Inventory allocation<br>
-            Warehouse distribution<br>
-            Route optimization<br>
-            Predict maintenance and downtime<br><br>
-
-            <b>AI Insights Layer</b><br>
-            Actionable dashboards<br>
-            AI-based decision support
+            <b>Supply Chain Optimization</b>
+            <ul>
+                <li>Inventory allocation</li>
+                <li>Warehouse distribution</li>
+                <li>Route optimization</li>
+                <li>Predict maintenance and downtime</li>
+            </ul>
+        
+            <b>AI Insights Layer</b>
+            <ul>
+                <li>Actionable dashboards</li>
+                <li>AI-based decision support</li>
+            </ul>
             </div>
             """, unsafe_allow_html=True)
 
+
         # ---------------- WHY NEEDED ----------------
-        st.markdown('<div class="section-title">❓ Why It Is Needed</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Why It Is Needed</div>', unsafe_allow_html=True)
+
         st.markdown("""
         <div class="card">
-        <b>Challenges</b><br>
-        Inventory wastage and stockouts<br>
-        Logistics delays<br>
-        High operational costs<br><br>
-
-        <b>Solutions by OmniFlow</b><br>
-        AI-driven forecasting<br>
-        Optimized routes and inventory<br>
-        Real-time proactive decision-making
+        <b>Challenges</b>
+        <ul>
+            <li>Inventory wastage and stockouts</li>
+            <li>Logistics delays</li>
+            <li>High operational costs</li>
+        </ul>
+        
+        <b>Solutions by OmniFlow</b>
+        <ul>
+            <li>AI-driven forecasting</li>
+            <li>Optimized routes and inventory</li>
+            <li>Real-time proactive decision-making</li>
+        </ul>
         </div>
         """, unsafe_allow_html=True)
 
         # ---------------- WHO CAN USE ----------------
-        st.markdown('<div class="section-title">👥 Who Can Use It</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Who Can Use It</div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="card">
-        <b>Enterprise Roles</b><br>
-        Supply Chain Managers<br>
-        Production Planners<br>
-        Logistics Coordinators<br>
-        Data Scientists<br>
-        Data Analysts<br>
-        Business Analysts<br><br>
-
-        <b>Industry Sectors</b><br>
-        Retail<br>
-        Manufacturing<br>
-        E-commerce<br>
-        FMCG<br>
-        Pharmaceuticals
+        <b>Enterprise Roles</b>
+        <ul>
+            <li>Supply Chain Managers</li>
+            <li>Production Planners</li>
+            <li>Logistics Coordinators</li>
+            <li>Data Scientists</li>
+            <li>Data Analysts</li>
+            <li>Business Analysts</li>
+        </ul>
+        
+        <b>Industry Sectors</b>
+        <ul>
+            <li>Retail</li>
+            <li>Manufacturing</li>
+            <li>E-commerce</li>
+            <li>FMCG</li>
+            <li>Pharmaceuticals</li>
+        </ul>
         </div>
         """, unsafe_allow_html=True)
+
 
     # ==================================================================================
     # TAB 2 : APPLICATION (FULL CONTENT – NOTHING SKIPPED)
@@ -341,10 +355,10 @@ def demand_forecasting_page():
         # ---------------- LOAD DATA ----------------
         df = load_data()
 
-        with st.expander("📘 Data Dictionary"):
+        with st.expander("Data Dictionary"):
             st.dataframe(DATA_DICTIONARY, use_container_width=True)
 
-        with st.expander("📊 Data Profiling"):
+        with st.expander("Data Profiling"):
             profile = data_profiling(df)
             for k, v in profile.items():
                 st.write(f"**{k}:** {v}")
@@ -447,6 +461,8 @@ def demand_forecasting_page():
         )
 
         # ---------------- FORECAST VISUAL ----------------
+        
+        st.markdown('<div class="section-title">Forecast with Confidence Interval</div>', unsafe_allow_html=True)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["forecast"], name="Forecast"))
         fig.add_trace(go.Scatter(x=df_forecast["date"], y=df_forecast["upper_ci"], name="Upper CI", line=dict(dash="dot")))
