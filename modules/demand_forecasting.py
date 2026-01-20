@@ -345,6 +345,3 @@ def demand_forecasting_page():
         q = st.text_input("Ask: highest demand, average demand, demand trend")
         if q:
             st.info(nlp_answer(df_forecast, q))
-
-
-demand_forecasting_page()
