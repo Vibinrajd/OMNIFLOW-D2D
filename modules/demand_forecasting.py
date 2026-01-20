@@ -33,6 +33,73 @@ DATA_DICTIONARY = pd.DataFrame({
     ]
 })
 
+
+# ======================================================================================
+# PATH CONFIG
+# ======================================================================================
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_PATH = os.path.join(BASE_DIR, "data", "sales.csv")
+
+# ======================================================================================
+# LOAD DATA
+# ======================================================================================
+@st.cache_data
+def load_data():
+    df = pd.read_csv(DATA_PATH)
+    df.columns = df.columns.str.strip().str.lower()
+    df["date"] = pd.to_datetime(df["date"])
+    return df
+
+# ======================================================================================
+# DATA PROFILING
+# ======================================================================================
+def data_profiling(df):
+    return {
+        "Total Records": len(df),
+        "Date Range": f"{df['date'].min().date()} → {df['date'].max().date()}",
+        "Unique Stores": df["store_id"].nunique(),
+        "Unique Products": df["product_id"].nunique(),
+        "Average Daily Sales": round(df["daily_sales"].mean(), 2),
+        "Sales Volatility (Std)": round(df["daily_sales"].std(), 2),
+        "Total Missing Cells": int(df.isnull().sum().sum()),
+        "Missing %": round((df.isnull().sum().sum() / df.size) * 100, 2)
+    }
+
+# ======================================================================================
+# FEATURE ENGINEERING
+# ======================================================================================
+def feature_engineering(df):
+    df = df.sort_values("date")
+
+    df["lag_1"] = df["daily_sales"].shift(1)
+    df["lag_7"] = df["daily_sales"].shift(7)
+    df["rolling_7"] = df["daily_sales"].rolling(7).mean()
+
+    df["month"] = df["date"].dt.month
+    df["day_of_week"] = df["date"].dt.dayofweek
+
+    df.dropna(inplace=True)
+    return df
+
+# ======================================================================================
+# NLP ANALYTICS
+# ======================================================================================
+def nlp_answer(df, query):
+    q = query.lower()
+
+    if "highest demand" in q:
+        return f"Highest daily demand: {df['forecast'].max():.0f} units"
+    if "average demand" in q:
+        return f"Average daily demand: {df['forecast'].mean():.2f} units"
+    if "trend" in q:
+        return (
+            "Demand trend is increasing 📈"
+            if df["forecast"].iloc[-1] > df["forecast"].iloc[0]
+            else "Demand trend is decreasing 📉"
+        )
+
+    return "Try: highest demand, average demand, demand trend"
+
 def demand_forecasting_page():
 
     st.title("Demand Forecasting")
